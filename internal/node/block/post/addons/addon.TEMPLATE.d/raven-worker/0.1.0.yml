@@ -1,0 +1,233 @@
+# Source: raven-agent/templates/rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: raven-agent-account
+  namespace: kube-system
+---
+# Source: raven-agent/templates/config.yaml
+apiVersion: v1
+data:
+  vpn-connection-psk: {{.RavenPSK}}
+kind: Secret
+metadata:
+  name: raven-agent-secret
+  namespace: kube-system
+type: Opaque
+---
+# Source: raven-agent/templates/config.yaml
+apiVersion: v1
+data:
+  enable-l3-tunnel: "true"
+  enable-l7-proxy: "true"
+kind: ConfigMap
+metadata:
+  name: raven-cfg
+  namespace: kube-system
+---
+# Source: raven-agent/templates/config.yaml
+apiVersion: v1
+data:
+  vpn-driver: "libreswan"
+  forward-node-ip: "false"
+  nat-traversal: "false"
+  metric-bind-addr: ":10265"
+  tunnel-bind-addr: ":4500"
+  proxy-external-addr: ":10262"
+  proxy-internal-insecure-addr: ":10264"
+  proxy-internal-secure-addr: ":10263"
+kind: ConfigMap
+metadata:
+  name: raven-agent-config
+  namespace: kube-system
+---
+# Source: raven-agent/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: raven-agent-role
+rules:
+  - apiGroups:
+      - raven.openyurt.io
+    resources:
+      - gateways
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - services
+      - nodes
+      - pods
+    verbs:
+      - get
+      - list
+      - update
+      - watch
+  - apiGroups:
+      - certificates.k8s.io
+    resources:
+      - certificatesigningrequests
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+---
+# Source: raven-agent/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+  name: raven-proxy-user
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/stats
+      - nodes/metrics
+      - nodes/log
+      - nodes/spec
+      - nodes/proxy
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - delete
+      - update
+      - patch
+---
+# Source: raven-agent/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: raven-agent-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: raven-agent-role
+subjects:
+  - kind: ServiceAccount
+    name: raven-agent-account
+    namespace: kube-system
+---
+# Source: raven-agent/templates/rbac.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: raven-proxy-user-binding
+subjects:
+  - kind: User
+    name: tunnel-proxy-client
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: raven-proxy-user
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: raven-agent/templates/daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: raven-agent-ds
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: raven-agent
+  template:
+    metadata:
+      labels:
+        app: raven-agent
+        uuid: {{.UUID}}
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: type
+                    operator: NotIn
+                    values:
+                      - virtual-kubelet
+      containers:
+        - image: registry.{{.Region}}.aliyuncs.com/aoxn/raven-agent:{{.ImageVersion}}
+          imagePullPolicy: Always
+          name: raven-agent
+          livenessProbe:
+            failureThreshold: 10
+            httpGet:
+              path: /healthz
+              port: 10275
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 15
+          readinessProbe:
+            failureThreshold: 10
+            httpGet:
+              path: /readyz
+              port: 10275
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 15
+          securityContext:
+            privileged: true
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: VPN_CONNECTION_PSK
+              valueFrom:
+                secretKeyRef:
+                  key: vpn-connection-psk
+                  name: raven-agent-secret
+          args:
+            - --v=2
+            - --vpn-driver=libreswan
+            - --forward-node-ip=false
+            - --nat-traversal=false
+            - --metric-bind-addr=:10265
+            - --health-probe-addr=:10275
+            - --vpn-bind-port=:4500
+            - --keep-alive-interval=15
+            - --keep-alive-timeout=30
+#            - --sync-raven-rules=true
+#            - --sync-raven-rules-period=30m
+            - --proxy-metric-bind-addr=:10266
+            - --proxy-internal-secure-addr=:10263
+            - --proxy-internal-insecure-addr=:10264
+            - --proxy-external-addr=:10262
+          volumeMounts:
+            - name: raven-dir
+              mountPath: /var/lib/raven
+      hostNetwork: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      serviceAccountName: raven-agent-account
+      tolerations:
+        - operator: Exists
+      volumes:
+        - name: raven-dir
+          hostPath:
+            path: /var/lib/raven
+            type: DirectoryOrCreate
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 20%
+

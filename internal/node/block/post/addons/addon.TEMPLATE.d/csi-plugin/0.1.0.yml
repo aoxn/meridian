@@ -1,0 +1,391 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: csi-admin
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: alicloud-csi-plugin
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "update", "create", "delete", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims/status"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["csi.storage.k8s.io"]
+    resources: ["csinodeinfos"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["create", "get", "list", "watch", "update", "delete"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["create", "list", "watch", "delete", "get", "update", "patch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "list", "watch", "delete", "update"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents/status"]
+    verbs: ["update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments/status"]
+    verbs: ["patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots/status"]
+    verbs: ["update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods","pods/exec"]
+    verbs: ["create", "delete", "get", "post", "list", "watch", "patch", "udpate"]
+  - apiGroups: ["storage.alibabacloud.com"]
+    resources: ["rules"]
+    verbs: ["get"]
+  - apiGroups: ["storage.alibabacloud.com"]
+    resources: ["containernetworkfilesystems"]
+    verbs: ["get","list", "watch"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: alicloud-csi-plugin
+subjects:
+  - kind: User
+    name: csi-admin
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: alicloud-csi-plugin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: csi-kubeconfig
+  name: csi-kubeconfig
+  namespace: kube-system
+data:
+  kubeconfig.conf: |
+    apiVersion: v1
+    kind: Config
+    clusters:
+    - cluster:
+        certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        server: {{.IntranetApiServerEndpoint}}
+      name: default
+    contexts:
+    - context:
+        cluster: default
+        namespace: default
+        user: default
+      name: default
+    current-context: default
+    users:
+    - name: default
+      user:
+        tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+---
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: diskplugin.csi.alibabacloud.com
+spec:
+  attachRequired: true
+  podInfoOnMount: true
+---
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: nasplugin.csi.alibabacloud.com
+spec:
+  attachRequired: false
+  podInfoOnMount: true
+---
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: ossplugin.csi.alibabacloud.com
+spec:
+  attachRequired: false
+  podInfoOnMount: true
+---
+kind: Secret
+apiVersion: v1
+metadata:
+  labels:
+    xdpin.cn/account: infra
+    xdpin.cn/managed-by: xdpin
+  name: csi-account
+  namespace: kube-system
+stringData:
+  access_key_id: "{{ .AuthInfo.AccessKey}}"
+  access_key_secret: "{{.AuthInfo.AccessSecret}}"
+  account_id: "infra"
+  description: "alibaba cloud account"
+  provider: "{{ .AuthInfo.Type }}"
+---
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: csi-plugin-{{.ToNodeGroup}}
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: "csi-plugin-{{ .ToNodeGroup }}"
+  template:
+    metadata:
+      labels:
+        app: "csi-plugin-{{ .ToNodeGroup }}"
+        random.uuid: "{{ .UUID }}"
+    spec:
+      tolerations:
+        - operator: Exists
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: type
+                    operator: NotIn
+                    values:
+                      - virtual-kubelet
+      nodeSelector:
+        kubernetes.io/os: linux
+{{- if ne .ToNodeGroup "" }}
+        xdpin.cn/nodegroup: "{{- .ToNodeGroup -}}"
+{{ end }}
+      serviceAccount: csi-admin
+      priorityClassName: system-node-critical
+      hostNetwork: true
+      hostPID: true
+      containers:
+        - name: disk-driver-registrar
+          image: registry-{{.Region}}.ack.aliyuncs.com/acs/csi-node-driver-registrar:v2.9.0-d48d2e0-aliyun
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          args:
+            - "--v=5"
+            - "--csi-address=/var/lib/kubelet/csi-plugins/diskplugin.csi.alibabacloud.com/csi.sock"
+            - "--kubelet-registration-path=/var/lib/kubelet/csi-plugins/diskplugin.csi.alibabacloud.com/csi.sock"
+          volumeMounts:
+            - name: kubelet-dir
+              mountPath: /var/lib/kubelet
+            - name: registration-dir
+              mountPath: /registration
+        - name: nas-driver-registrar
+          image: registry-{{.Region}}.ack.aliyuncs.com/acs/csi-node-driver-registrar:v2.9.0-d48d2e0-aliyun
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          args:
+            - "--v=5"
+            - "--csi-address=/var/lib/kubelet/csi-plugins/nasplugin.csi.alibabacloud.com/csi.sock"
+            - "--kubelet-registration-path=/var/lib/kubelet/csi-plugins/nasplugin.csi.alibabacloud.com/csi.sock"
+          volumeMounts:
+            - name: kubelet-dir
+              mountPath: /var/lib/kubelet/
+            - name: registration-dir
+              mountPath: /registration
+        - name: oss-driver-registrar
+          image: registry-{{.Region}}.ack.aliyuncs.com/acs/csi-node-driver-registrar:v2.9.0-d48d2e0-aliyun
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          args:
+            - "--v=5"
+            - "--csi-address=/var/lib/kubelet/csi-plugins/ossplugin.csi.alibabacloud.com/csi.sock"
+            - "--kubelet-registration-path=/var/lib/kubelet/csi-plugins/ossplugin.csi.alibabacloud.com/csi.sock"
+          volumeMounts:
+            - name: kubelet-dir
+              mountPath: /var/lib/kubelet/
+            - name: registration-dir
+              mountPath: /registration
+        - name: csi-plugin
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+            allowPrivilegeEscalation: true
+          image: registry-{{.Region}}.ack.aliyuncs.com/acs/csi-plugin:{{.ImageVersion}}
+          imagePullPolicy: "Always"
+          args:
+            - "--service=$(CSI_ENDPOINT)"
+            - "--v=2"
+            - "--driver=oss,nas,disk"
+            - "--kubeconfig=/var/lib/config/kubeconfig"
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix://var/lib/kubelet/csi-plugins/driverplugin.csi.alibabacloud.com-replace/csi.sock
+            - name: MAX_VOLUMES_PERNODE
+              value: "15"
+            - name: SERVICE_TYPE
+              value: "plugin"
+            - name: ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: csi-account
+                  key: access_key_id
+            - name: ACCESS_KEY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: csi-account
+                  key: access_key_secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 1024Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          ports:
+            - name: healthz
+              containerPort: 11260
+          volumeMounts:
+            - name: kubelet-dir
+              mountPath: /var/lib/kubelet/
+              mountPropagation: "Bidirectional"
+            - name: etc
+              mountPath: /host/etc
+            - name: host-log
+              mountPath: /var/log/
+            - name: ossconnectordir
+              mountPath: /host/usr/
+            - name: container-dir
+              mountPath: /var/lib/container
+              mountPropagation: "Bidirectional"
+            - name: host-dev
+              mountPath: /dev
+              mountPropagation: "HostToContainer"
+            - mountPath: /host/var/run/ossfs
+              name: ossfs-metrics-dir
+            - mountPath: /host/var/run/efc
+              name: efc-metrics-dir
+            - mountPath: /etc/csi-plugin/config
+              name: csi-plugin-cm
+            - name: host-mnt
+              mountPath: /mnt
+              mountPropagation: "Bidirectional"
+            - mountPath: /var/lib/config
+              name: csi-kubeconfig
+      volumes:
+        - name: csi-kubeconfig
+          projected:
+            defaultMode: 420
+            sources:
+              - secret:
+                  items:
+                    - key: kubeconfig
+                      path: kubeconfig
+                  name: csi-kubeconfig
+        - name: ossfs-metrics-dir
+          hostPath:
+            path: /var/run/ossfs
+            type: DirectoryOrCreate
+        - name: efc-metrics-dir
+          hostPath:
+            path: /var/run/efc
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: DirectoryOrCreate
+        - name: container-dir
+          hostPath:
+            path: /var/lib/container
+            type: DirectoryOrCreate
+        - name: kubelet-dir
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: host-dev
+          hostPath:
+            path: /dev
+        - name: host-log
+          hostPath:
+            path: /var/log/
+        - name: etc
+          hostPath:
+            path: /etc
+        - name: ossconnectordir
+          hostPath:
+            path: /usr/
+        - name: host-mnt
+          hostPath:
+            path: /mnt
+            type: DirectoryOrCreate
+        - name: csi-plugin-cm
+          configMap:
+            name: csi-plugin
+            optional: true

@@ -1,0 +1,3 @@
+instance-id: {{.IID}}
+local-hostname: md-{{.Name}}
+

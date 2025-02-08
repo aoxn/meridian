@@ -1,0 +1,687 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
+  name: masters.meridian.meridian.io
+spec:
+  group: meridian.meridian.io
+  names:
+    kind: Master
+    listKind: MasterList
+    plural: masters
+    singular: master
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Master is the Schema for the masters API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the service the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: MasterSpec defines the desired state of Master
+            properties:
+              Identity:
+                description: 'ID provider Id of type: region.instanceid'
+                type: string
+              addon:
+                additionalProperties:
+                  additionalProperties:
+                    type: string
+                  type: object
+                type: object
+              ip:
+                type: string
+            type: object
+          status:
+            description: MasterStatus defines the observed state of Master
+            properties:
+              bootcfg:
+                description: Cluster is the Schema for the clusters API
+                properties:
+                  apiVersion:
+                    description: 'APIVersion defines the versioned schema of this
+                      representation of an object. Servers should convert recognized
+                      schemas to the latest internal value, and may reject unrecognized
+                      values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                    type: string
+                  kind:
+                    description: 'Kind is a string value representing the REST resource
+                      this object represents. Servers may infer this from the service
+                      the client submits requests to. Cannot be updated. In CamelCase.
+                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                    type: string
+                  metadata:
+                    type: object
+                  spec:
+                    description: ClusterSpec defines the desired state of Cluster
+                    properties:
+                      infraSpec:
+                        description: InfraSpec defines the desired state of Infra
+                        properties:
+                          eip:
+                            items:
+                              properties:
+                                identity:
+                                  properties:
+                                    lifecycle:
+                                      description: LifeCycle managed or detached
+                                      type: string
+                                    name:
+                                      type: string
+                                    rid:
+                                      type: string
+                                  type: object
+                                ipAddr:
+                                  description: Ref      string `json:"ref,omitempty"`
+                                  type: string
+                              type: object
+                            type: array
+                          ess:
+                            properties:
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                              imageId:
+                                type: string
+                              instanceType:
+                                type: string
+                              max:
+                                type: integer
+                              min:
+                                type: integer
+                              scalingConfig:
+                                properties:
+                                  identity:
+                                    properties:
+                                      lifecycle:
+                                        description: LifeCycle managed or detached
+                                        type: string
+                                      name:
+                                        type: string
+                                      rid:
+                                        type: string
+                                    type: object
+                                type: object
+                              scalingRule:
+                                properties:
+                                  ScalingRuleAri:
+                                    type: string
+                                  identity:
+                                    properties:
+                                      lifecycle:
+                                        description: LifeCycle managed or detached
+                                        type: string
+                                      name:
+                                        type: string
+                                      rid:
+                                        type: string
+                                    type: object
+                                type: object
+                            type: object
+                          natGateway:
+                            properties:
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                              refEip:
+                                type: string
+                              snatTableId:
+                                type: string
+                            type: object
+                          ram:
+                            properties:
+                              arn:
+                                type: string
+                              document:
+                                type: string
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                              policy:
+                                type: string
+                            type: object
+                          region:
+                            description: Foo is an example field of Infra. Edit infra_types.go
+                              to remove/update
+                            type: string
+                          securityGroup:
+                            properties:
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                            type: object
+                          slb:
+                            properties:
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                              ipAddr:
+                                type: string
+                              listener:
+                                items:
+                                  properties:
+                                    bandwidth:
+                                      type: integer
+                                    port:
+                                      type: integer
+                                    proto:
+                                      type: string
+                                  type: object
+                                type: array
+                              refEip:
+                                type: string
+                              refVswitch:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                          vpc:
+                            properties:
+                              cidr:
+                                type: string
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                              routeTableId:
+                                type: string
+                              vRouterId:
+                                type: string
+                            type: object
+                          vswitch:
+                            items:
+                              properties:
+                                cidrBlock:
+                                  type: string
+                                identity:
+                                  properties:
+                                    lifecycle:
+                                      description: LifeCycle managed or detached
+                                      type: string
+                                    name:
+                                      type: string
+                                    rid:
+                                      type: string
+                                  type: object
+                                zoneId:
+                                  type: string
+                              type: object
+                            type: array
+                        type: object
+                      masterSpec:
+                        description: MasterSetSpec defines the desired state of MasterSet
+                        properties:
+                          config:
+                            properties:
+                              cloudType:
+                                type: string
+                              description:
+                                type: string
+                              etcd:
+                                properties:
+                                  endpoints:
+                                    type: string
+                                  initToken:
+                                    type: string
+                                  unit:
+                                    properties:
+                                      name:
+                                        type: string
+                                      paras:
+                                        additionalProperties:
+                                          type: string
+                                        type: object
+                                      version:
+                                        type: string
+                                    type: object
+                                type: object
+                              imageId:
+                                type: string
+                              infraRef:
+                                type: string
+                              kubernetes:
+                                properties:
+                                  unit:
+                                    properties:
+                                      name:
+                                        type: string
+                                      paras:
+                                        additionalProperties:
+                                          type: string
+                                        type: object
+                                      version:
+                                        type: string
+                                    type: object
+                                type: object
+                              namespace:
+                                type: string
+                              network:
+                                properties:
+                                  domain:
+                                    type: string
+                                  mode:
+                                    type: string
+                                  netMask:
+                                    type: string
+                                  podcidr:
+                                    type: string
+                                  svccidr:
+                                    type: string
+                                type: object
+                              registry:
+                                type: string
+                              runtime:
+                                properties:
+                                  name:
+                                    type: string
+                                  runtimeType:
+                                    type: string
+                                  version:
+                                    type: string
+                                type: object
+                              sans:
+                                items:
+                                  type: string
+                                type: array
+                              tls:
+                                additionalProperties:
+                                  properties:
+                                    cert:
+                                      format: byte
+                                      type: string
+                                    key:
+                                      format: byte
+                                      type: string
+                                  type: object
+                                type: object
+                              token:
+                                description: Token bootstrap with expiration of 2h
+                                type: string
+                            type: object
+                          minReadySeconds:
+                            description: Minimum number of seconds for which a newly
+                              created pod should be ready without any of its container
+                              crashing, for it to be considered available. Defaults
+                              to 0 (pod will be considered available as soon as it
+                              is ready)
+                            format: int32
+                            type: integer
+                          paused:
+                            description: Indicates that the deployment is paused.
+                            type: boolean
+                          progressDeadlineSeconds:
+                            description: The maximum time in seconds for a deployment
+                              to make progress before it is considered to be failed.
+                              The deployment controller will continue to process failed
+                              deployments and a condition with a ProgressDeadlineExceeded
+                              reason will be surfaced in the deployment status. Note
+                              that progress will not be estimated during the time
+                              a deployment is paused. Defaults to 600s.
+                            format: int32
+                            type: integer
+                          replicas:
+                            description: Number of desired pods. This is a pointer
+                              to distinguish between explicit zero and not specified.
+                              Defaults to 1.
+                            format: int32
+                            type: integer
+                          revisionHistoryLimit:
+                            description: The number of old ReplicaSets to retain to
+                              allow rollback. This is a pointer to distinguish between
+                              explicit zero and not specified. Defaults to 10.
+                            format: int32
+                            type: integer
+                          selector:
+                            description: Label selector for pods. Existing ReplicaSets
+                              whose pods are selected by this will be the ones affected
+                              by this deployment. It must match the pod template's
+                              labels.
+                            properties:
+                              matchExpressions:
+                                description: matchExpressions is a list of label selector
+                                  requirements. The requirements are ANDed.
+                                items:
+                                  description: A label selector requirement is a selector
+                                    that contains values, a key, and an operator that
+                                    relates the key and values.
+                                  properties:
+                                    key:
+                                      description: key is the label key that the selector
+                                        applies to.
+                                      type: string
+                                    operator:
+                                      description: operator represents a key's relationship
+                                        to a set of values. Valid operators are In,
+                                        NotIn, Exists and DoesNotExist.
+                                      type: string
+                                    values:
+                                      description: values is an array of string values.
+                                        If the operator is In or NotIn, the values
+                                        array must be non-empty. If the operator is
+                                        Exists or DoesNotExist, the values array must
+                                        be empty. This array is replaced during a
+                                        strategic merge patch.
+                                      items:
+                                        type: string
+                                      type: array
+                                  required:
+                                  - key
+                                  - operator
+                                  type: object
+                                type: array
+                              matchLabels:
+                                additionalProperties:
+                                  type: string
+                                description: matchLabels is a map of {key,value} pairs.
+                                  A single {key,value} in the matchLabels map is equivalent
+                                  to an element of matchExpressions, whose key field
+                                  is "key", the operator is "In", and the values array
+                                  contains only "value". The requirements are ANDed.
+                                type: object
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          template:
+                            description: Template describes the pods that will be
+                              created. The only allowed template.spec.restartPolicy
+                              value is "Always".
+                            properties:
+                              metadata:
+                                description: 'Standard object''s metadata. More info:
+                                  https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata'
+                                type: object
+                              spec:
+                                description: 'Specification of the desired behavior
+                                  of the master. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status'
+                                properties:
+                                  Identity:
+                                    description: 'ID provider Id of type: region.instanceid'
+                                    type: string
+                                  addon:
+                                    additionalProperties:
+                                      additionalProperties:
+                                        type: string
+                                      type: object
+                                    type: object
+                                  ip:
+                                    type: string
+                                type: object
+                            type: object
+                        required:
+                        - selector
+                        - template
+                        type: object
+                    type: object
+                  status:
+                    description: ClusterStatus defines the observed state of Cluster
+                    properties:
+                      infraState:
+                        description: InfraSpec defines the desired state of Infra
+                        properties:
+                          eip:
+                            items:
+                              properties:
+                                identity:
+                                  properties:
+                                    lifecycle:
+                                      description: LifeCycle managed or detached
+                                      type: string
+                                    name:
+                                      type: string
+                                    rid:
+                                      type: string
+                                  type: object
+                                ipAddr:
+                                  description: Ref      string `json:"ref,omitempty"`
+                                  type: string
+                              type: object
+                            type: array
+                          ess:
+                            properties:
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                              imageId:
+                                type: string
+                              instanceType:
+                                type: string
+                              max:
+                                type: integer
+                              min:
+                                type: integer
+                              scalingConfig:
+                                properties:
+                                  identity:
+                                    properties:
+                                      lifecycle:
+                                        description: LifeCycle managed or detached
+                                        type: string
+                                      name:
+                                        type: string
+                                      rid:
+                                        type: string
+                                    type: object
+                                type: object
+                              scalingRule:
+                                properties:
+                                  ScalingRuleAri:
+                                    type: string
+                                  identity:
+                                    properties:
+                                      lifecycle:
+                                        description: LifeCycle managed or detached
+                                        type: string
+                                      name:
+                                        type: string
+                                      rid:
+                                        type: string
+                                    type: object
+                                type: object
+                            type: object
+                          natGateway:
+                            properties:
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                              refEip:
+                                type: string
+                              snatTableId:
+                                type: string
+                            type: object
+                          ram:
+                            properties:
+                              arn:
+                                type: string
+                              document:
+                                type: string
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                              policy:
+                                type: string
+                            type: object
+                          region:
+                            description: Foo is an example field of Infra. Edit infra_types.go
+                              to remove/update
+                            type: string
+                          securityGroup:
+                            properties:
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                            type: object
+                          slb:
+                            properties:
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                              ipAddr:
+                                type: string
+                              listener:
+                                items:
+                                  properties:
+                                    bandwidth:
+                                      type: integer
+                                    port:
+                                      type: integer
+                                    proto:
+                                      type: string
+                                  type: object
+                                type: array
+                              refEip:
+                                type: string
+                              refVswitch:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                          vpc:
+                            properties:
+                              cidr:
+                                type: string
+                              identity:
+                                properties:
+                                  lifecycle:
+                                    description: LifeCycle managed or detached
+                                    type: string
+                                  name:
+                                    type: string
+                                  rid:
+                                    type: string
+                                type: object
+                              routeTableId:
+                                type: string
+                              vRouterId:
+                                type: string
+                            type: object
+                          vswitch:
+                            items:
+                              properties:
+                                cidrBlock:
+                                  type: string
+                                identity:
+                                  properties:
+                                    lifecycle:
+                                      description: LifeCycle managed or detached
+                                      type: string
+                                    name:
+                                      type: string
+                                    rid:
+                                      type: string
+                                  type: object
+                                zoneId:
+                                  type: string
+                              type: object
+                            type: array
+                        type: object
+                    type: object
+                type: object
+              instanceId:
+                type: string
+              peer:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                items:
+                  properties:
+                    Identity:
+                      type: string
+                    ip:
+                      type: string
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

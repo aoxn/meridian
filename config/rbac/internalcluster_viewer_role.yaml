@@ -1,0 +1,27 @@
+# permissions for end users to view internalclusters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: internalcluster-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: meridian
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/managed-by: kustomize
+  name: internalcluster-viewer-role
+rules:
+- apiGroups:
+  - meridian.meridian.io
+  resources:
+  - internalclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - meridian.meridian.io
+  resources:
+  - internalclusters/status
+  verbs:
+  - get

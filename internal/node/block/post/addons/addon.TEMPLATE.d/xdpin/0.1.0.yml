@@ -1,0 +1,92 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: xdpin-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - kind: ServiceAccount
+    name: xdpin
+    namespace: default
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: xdpin
+  namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xdpin
+  namespace: default
+  labels:
+    k8s-app: xdpin-app
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      k8s-app: xdpin-app
+  template:
+    metadata:
+      labels:
+        k8s-app: xdpin-app
+    spec:
+      serviceAccount: xdpin
+      priorityClassName: system-cluster-critical
+      tolerations:
+        - operator: Exists
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      containers:
+        - name: xdpin
+          image: registry.{{.Region}}.aliyuncs.com/aoxn/xdpin:{{.ImageVersion}}
+          imagePullPolicy: IfNotPresent
+          args: [ "daemon", "-m", "ddns,mapping,acl,controller" ]
+          resources:
+            limits:
+              memory: 170Mi
+            requests:
+              cpu: 100m
+              memory: 70Mi
+          volumeMounts:
+            - name: data
+              mountPath: /xdpin
+              readOnly: false
+      dnsPolicy: Default
+      hostNetwork: true
+      volumes:
+        - name: data
+          hostPath:
+            path: /mnt/disk0/aoxn/application/xdpin/
+            type: DirectoryOrCreate
+#        - name: config
+#          configMap:
+#            name: xdpin.cfg
+#            items:
+#            - key: config
+#              path: config
+  {{ if eq .Action "Ensure" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xdpin.cfg
+  namespace: default
+  labels:
+    xdpin.cn/mark: ""
+data:
+  config: |
+    mapping:
+    - state: enable
+      externalPort: 6443
+      internalPort: 6443
+      protocol: TCP
+      description: "kubernetes"
+  {{ end }}

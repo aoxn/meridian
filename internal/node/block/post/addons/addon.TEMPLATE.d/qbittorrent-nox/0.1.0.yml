@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qbittorrent
+  namespace: default
+  labels:
+    k8s-app: qbittorrent-app
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      k8s-app: qbittorrent-app
+  template:
+    metadata:
+      labels:
+        k8s-app: qbittorrent-app
+    spec:
+      priorityClassName: system-cluster-critical
+      tolerations:
+        - operator: Exists
+      hostNetwork: true
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      containers:
+        - name: qbittorrent
+          image: registry.{{.Region}}.aliyuncs.com/aoxn/qbittorrent-nox:{{.ImageVersion}}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: QBT_WEBUI_PORT
+              value: "8081"
+            - name: QBT_EULA
+              value: "accept"
+          resources:
+            limits:
+              memory: 5000Mi
+            requests:
+              cpu: 1000m
+              memory: 350Mi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: data
+              mountPath: /downloads
+      dnsPolicy: Default
+      volumes:
+        - name: data
+          hostPath:
+            path: /mnt/disk0/storage
+            type: DirectoryOrCreate
+        - name: config
+          hostPath:
+            path: /mnt/disk0/aoxn/application/qbittorrent/config/
+            type: DirectoryOrCreate

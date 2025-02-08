@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Config
+providers:
+  alibaba:
+    Type: alibaba
+    access-key: akkkkk
+    access-secret: seeee
+    region: cn-hangzhou
+current-context: alibaba

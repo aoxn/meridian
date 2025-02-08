@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: default
+  labels:
+    k8s-app: jellyfin-app
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      k8s-app: jellyfin-app
+  template:
+    metadata:
+      labels:
+        k8s-app: jellyfin-app
+    spec:
+      priorityClassName: system-cluster-critical
+      tolerations:
+        - operator: Exists
+      hostNetwork: true
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      containers:
+        - name: jellyfin
+          image: registry.{{.Region}}.aliyuncs.com/aoxn/jellyfin:{{.ImageVersion}}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DEBUG
+              value: "true"
+          resources:
+            limits:
+              memory: 1000Mi
+            requests:
+              cpu: 500m
+              memory: 150Mi
+          volumeMounts:
+            - name: data
+              mountPath: /media
+            - name: cache
+              mountPath: /cache
+            - name: config
+              mountPath: /config
+      dnsPolicy: Default
+      volumes:
+        - name: data
+          hostPath:
+            path: /mnt/disk0/storage
+            type: DirectoryOrCreate
+        - name: config
+          hostPath:
+            path: /mnt/disk0/aoxn/application/jellyfin/config
+            type: DirectoryOrCreate
+        - name: cache
+          hostPath:
+            path: /mnt/disk0/aoxn/application/jellyfin/cache
+            type: DirectoryOrCreate

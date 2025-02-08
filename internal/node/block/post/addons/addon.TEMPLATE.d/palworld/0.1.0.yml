@@ -1,0 +1,89 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app: palworld
+  name: palworld-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 12Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: palworld
+  name: palworld
+spec:
+  ports:
+    - name: server
+      port: 8211
+      protocol: UDP
+      targetPort: server
+    - name: query
+      port: 27015
+      protocol: UDP
+      targetPort: query
+  selector:
+    app: palworld
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: palworld
+  name: palworld
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: palworld
+  template:
+    metadata:
+      labels:
+        app: palworld
+    spec:
+      containers:
+        - name: palworld
+          image: registry.{{.Region}}.aliyuncs.com/aoxn/palworld:{{.ImageVersion}}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8211
+              name: server
+              protocol: UDP
+            - containerPort: 27015
+              name: query
+              protocol: UDP
+          env:
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: account.palworld
+                  key: rconPassword
+          envFrom:
+            - configMapRef:
+                name: palworld-cm
+          volumeMounts:
+            - mountPath: /home/steam/Steam/logs/
+              name: logs
+            - mountPath: /palworld
+              name: data
+      volumes:
+        - name: data
+          hostPath:
+            path: /mnt/palworld/data
+            type: DirectoryOrCreate
+        - name: logs
+          hostPath:
+            path: /mnt/palworld/logs
+            type: DirectoryOrCreate
+      #        - name: data
+      #    persistentVolumeClaim:
+      #      claimName: palworld-data

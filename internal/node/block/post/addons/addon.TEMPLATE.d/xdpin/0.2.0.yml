@@ -1,0 +1,409 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-bootstrap-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: node-bootstrap-role
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:meridian
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: node-bootstrap
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-bootstrap-role
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+      - patch
+      - watch
+  - apiGroups:
+      - xdpin.cn
+    resources:
+      - requests
+      - requests/status
+      - nodegroups
+      - nodegroups/status
+    verbs:
+      - get
+      - patch
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - patch
+      - update
+      - create
+  - apiGroups:
+      - "apps"
+    resources:
+      - daemonsets
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - pods/eviction
+    verbs:
+      - get
+      - list
+      - create
+      - delete
+      - update
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: xdpin-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - kind: ServiceAccount
+    name: xdpin
+    namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: xdpin-crd-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: xdpin-crd
+subjects:
+  - kind: ServiceAccount
+    name: xdpin
+    namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: xdpin-crd
+rules:
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - create
+      - update
+      - delete
+      - watch
+      - list
+      - get
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - subjectaccessreviews
+    verbs:
+      - create
+  - apiGroups:
+      - raven.openyurt.io
+    resources:
+      - gateways
+      - gateways/status
+      - gateways/finalizers
+    verbs:
+      - create
+      - update
+      - delete
+      - watch
+      - list
+      - get
+  - apiGroups:
+      - xdpin.cn
+    resources:
+      - nodegroups
+      - nodegroups/status
+      - nodegroups/finalizers
+      - requests
+      - requests/status
+    verbs:
+      - create
+      - update
+      - delete
+      - watch
+      - list
+      - get
+  - apiGroups:
+      - xdpin.cn
+    resources:
+      - providers
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - certificates.k8s.io
+    resources:
+      - certificatesigningrequests
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - certificates.k8s.io
+    resources:
+      - certificatesigningrequests/status
+      - certificatesigningrequests/approval
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - certificates.k8s.io
+    resources:
+      - signers
+    verbs:
+      - approve
+  - apiGroups:
+      - "coordination.k8s.io"
+    resources:
+      - leases
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - "admissionregistration.k8s.io"
+    resources:
+      - validatingwebhookconfigurations
+    verbs:
+      - create
+      - get
+      - list
+      - update
+      - watch
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - pods/log
+      - nodes
+      - nodes/status
+      - configmaps
+      - endpoints
+      - endpoints/status
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - delete
+      - watch
+      - update
+  - apiGroups:
+      - "storage.k8s.io"
+    resources:
+      - csidrivers
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - delete
+      - watch
+      - update
+  - apiGroups:
+      - "rbac.authorization.k8s.io"
+    resources:
+      - roles
+      - rolebindings
+      - clusterroles
+      - clusterrolebindings
+    verbs:
+      - create
+      - get
+      - list
+      - delete
+      - watch
+      - update
+      - patch
+      - bind
+      - escalate
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: xdpin
+  namespace: kube-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: raven-webhook
+  namespace: kube-system
+  labels:
+    k8s-app: xdpin-app
+spec:
+  type: ClusterIP
+  ipFamilyPolicy: SingleStack
+  clusterIP: None
+  ports:
+    - port: 8443
+      targetPort: 8443
+      protocol: TCP
+      name: tcp
+  selector:
+    k8s-app: xdpin-app
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xdpin
+  namespace: kube-system
+  labels:
+    k8s-app: xdpin-app
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      k8s-app: xdpin-app
+  template:
+    metadata:
+      labels:
+        k8s-app: xdpin-app
+    spec:
+      serviceAccountName: xdpin
+      priorityClassName: system-cluster-critical
+      tolerations:
+        - operator: Exists
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      containers:
+        - name: xdpin
+          image: registry.{{.Region}}.aliyuncs.com/aoxn/meridian:{{.ImageVersion}}
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: 170Mi
+            requests:
+              cpu: 100m
+              memory: 70Mi
+          volumeMounts:
+            - name: data
+              mountPath: /xdpin
+              readOnly: false
+            - name: meridian
+              mountPath: /etc/meridian/
+              readOnly: false
+      dnsPolicy: Default
+      hostNetwork: true
+      volumes:
+        - name: data
+          hostPath:
+            path: /mnt/disk0/aoxn/application/xdpin/
+            type: DirectoryOrCreate
+#        - name: config
+#          configMap:
+#            name: xdpin.cfg
+#            items:
+#            - key: config
+#              path: config
+        - name: meridian
+          configMap:
+            name: meridian.cfg
+            items:
+              - key: config
+                path: config
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  labels:
+    app: raven-gateways
+  name: raven-geteways
+  namespace: kube-system
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    url: https://127.0.0.1:8443/validate-raven-openyurt-io-v1beta1-gateway
+#    service:
+#      name: raven-webhook
+#      namespace: kube-system
+    caBundle: {{.WebHookCA}}
+  failurePolicy: Fail
+  name: raven-gateways.validate.k8s.io
+  rules:
+  - apiGroups:
+    - raven.openyurt.io
+    apiVersions:
+    - '*'
+    operations:
+    - '*'
+    resources:
+    - gateways
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 10
+{{ if eq .Action "Ensure" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meridian.cfg
+  namespace: kube-system
+  labels:
+    xdpin.cn/mark: ""
+data:
+  config: |
+    server:
+      webhookCA: {{.WebHookCA}}
+      webhookTLSCert: {{.WebHookTLSCert}}
+      webhookTLSKey: {{.WebHookTLSKey}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xdpin.cfg
+  namespace: kube-system
+  labels:
+    xdpin.cn/mark: ""
+data:
+  config: |
+    portMapping:
+    - state: enable
+      externalPort: {{ .APIPort }}
+      internalPort: {{ .APIPort }}
+      protocol: TCP
+      description: "kubernetes"
+ {{ end }}

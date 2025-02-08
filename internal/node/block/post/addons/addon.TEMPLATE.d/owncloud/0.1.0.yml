@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: owncloud
+  namespace: default
+  labels:
+    k8s-app: owncloud-app
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      k8s-app: owncloud-app
+  template:
+    metadata:
+      labels:
+        k8s-app: owncloud-app
+    spec:
+      priorityClassName: system-cluster-critical
+      tolerations:
+        - operator: Exists
+      hostNetwork: true
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      containers:
+        - name: owncloud
+          image: registry.{{.Region}}.aliyuncs.com/aoxn/owncloud:{{.ImageVersion}}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DEBUG
+              value: "true"
+            - name: OWNCLOUD_DEBUG
+              value: "true"
+            - name: APACHE_LISTEN
+              value: "9000"
+            - name: OWNCLOUD_DOMAIN
+              value: "{{ .APIDomain }}:9000"
+            - name: OWNCLOUD_TRUSTED_DOMAINS
+              value: "{{ .APIDomain }}:9000,localhost:9000"
+            - name: OWNCLOUD_DB_TYPE
+              value: "mysql"
+            - name: OWNCLOUD_DB_NAME
+              value: "aoxncloud"
+            - name: OWNCLOUD_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: account.owncloud
+                  key: dbuser
+            - name: OWNCLOUD_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: account.owncloud
+                  key: password
+            - name: OWNCLOUD_DB_HOST
+              value: "127.0.0.1"
+            - name: OWNCLOUD_ADMIN_USERNAME
+              value: "admin"
+            - name: OWNCLOUD_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: account.owncloud
+                  key: ocpassword
+            - name: OWNCLOUD_MYSQL_UTF8MB4
+              value: "true"
+            - name: OWNCLOUD_REDIS_ENABLED
+              value: "false"
+          resources:
+            limits:
+              memory: 1000Mi
+            requests:
+              cpu: 500m
+              memory: 150Mi
+          volumeMounts:
+            - name: data
+              mountPath: /mnt/data
+      dnsPolicy: Default
+      volumes:
+        - name: data
+          hostPath:
+            path: /mnt/disk0/aoxn/application/owncloud/data/
+            type: DirectoryOrCreate

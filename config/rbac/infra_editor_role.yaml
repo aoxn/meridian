@@ -1,0 +1,31 @@
+# permissions for end users to edit infras.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: infra-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: meridian
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/managed-by: kustomize
+  name: infra-editor-role
+rules:
+- apiGroups:
+  - meridian.meridian.io
+  resources:
+  - infras
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - meridian.meridian.io
+  resources:
+  - infras/status
+  verbs:
+  - get

@@ -1,0 +1,12 @@
+apiVersion: meridian.meridian.io/v1
+kind: Master
+metadata:
+  labels:
+    app.kubernetes.io/name: master
+    app.kubernetes.io/instance: master-sample
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: meridian
+  name: master-sample
+spec:
+  # TODO(user): Add fields here

@@ -1,0 +1,113 @@
+---
+# Source: raven-agent/templates/daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: raven-agent-ds-worker
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: raven-agent-ds-worker
+      random.uuid: "{{ .UUID }}"
+  template:
+    metadata:
+      labels:
+        app: raven-agent-ds-worker
+        random.uuid: "{{ .UUID }}"
+    spec:
+      hostAliases:
+        - ip: "{{.APIAccessPoint}}"
+          hostnames:
+            - "{{.APIDomain}}"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: type
+                    operator: NotIn
+                    values:
+                      - virtual-kubelet
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      containers:
+        - image: registry.{{.Region}}.aliyuncs.com/aoxn/raven-agent:{{.ImageVersion}}
+          imagePullPolicy: Always
+          name: raven-agent-worker
+          livenessProbe:
+            failureThreshold: 10
+            httpGet:
+              path: /healthz
+              port: 10275
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 15
+          readinessProbe:
+            failureThreshold: 10
+            httpGet:
+              path: /readyz
+              port: 10275
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 15
+          securityContext:
+            privileged: true
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: VPN_CONNECTION_PSK
+              valueFrom:
+                secretKeyRef:
+                  key: vpn-connection-psk
+                  name: raven-agent-secret
+          args:
+            - --v=2
+            - --vpn-driver=libreswan
+            - --forward-node-ip=true
+            - --nat-traversal=true
+            - --metric-bind-addr=:10265
+            - --health-probe-addr=:10275
+            - --vpn-bind-port=:4510
+            - --keep-alive-interval=15
+            - --keep-alive-timeout=30
+#            - --sync-raven-rules=true
+#            - --sync-raven-rules-period=30m
+            - --proxy-metric-bind-addr=:10266
+            - --proxy-internal-secure-addr=:10263
+            - --proxy-internal-insecure-addr=:10264
+            - --proxy-external-addr=:10262
+            - --kubeconfig=/etc/raven/kubeconfig
+          volumeMounts:
+            - name: raven-dir
+              mountPath: /var/lib/raven
+            - name: raven-kubeconfig
+              mountPath: /etc/raven
+      hostNetwork: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - operator: Exists
+      volumes:
+        - name: raven-dir
+          hostPath:
+            path: /var/lib/raven
+            type: DirectoryOrCreate
+        - name: raven-kubeconfig
+          hostPath:
+            path: /etc/raven
+            type: Directory
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 20%
+

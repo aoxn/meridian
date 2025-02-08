@@ -1,0 +1,333 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
+  name: requests.meridian.meridian.io
+spec:
+  group: meridian.meridian.io
+  names:
+    kind: Request
+    listKind: RequestList
+    plural: requests
+    singular: request
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Request is the Schema for the requests API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the service the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RequestSpec defines the desired state of Request
+            properties:
+              accessPoint:
+                description: AccessPoint
+                properties:
+                  backends:
+                    items:
+                      properties:
+                        id:
+                          type: string
+                        ip:
+                          type: string
+                      type: object
+                    type: array
+                  internet:
+                    type: string
+                  intranet:
+                    type: string
+                type: object
+              initType:
+                description: InitType one of init | join
+                type: string
+              masterSet:
+                description: MasterSet is an example field of Request. Edit request_types.go
+                  to remove/update
+                properties:
+                  config:
+                    properties:
+                      cloudType:
+                        type: string
+                      description:
+                        type: string
+                      etcd:
+                        properties:
+                          endpoints:
+                            type: string
+                          initToken:
+                            type: string
+                          unit:
+                            properties:
+                              name:
+                                type: string
+                              paras:
+                                additionalProperties:
+                                  type: string
+                                type: object
+                              version:
+                                type: string
+                            type: object
+                        type: object
+                      imageId:
+                        type: string
+                      infraRef:
+                        type: string
+                      kubernetes:
+                        properties:
+                          unit:
+                            properties:
+                              name:
+                                type: string
+                              paras:
+                                additionalProperties:
+                                  type: string
+                                type: object
+                              version:
+                                type: string
+                            type: object
+                        type: object
+                      namespace:
+                        type: string
+                      network:
+                        properties:
+                          domain:
+                            type: string
+                          mode:
+                            type: string
+                          netMask:
+                            type: string
+                          podcidr:
+                            type: string
+                          svccidr:
+                            type: string
+                        type: object
+                      registry:
+                        type: string
+                      runtime:
+                        properties:
+                          name:
+                            type: string
+                          runtimeType:
+                            type: string
+                          version:
+                            type: string
+                        type: object
+                      sans:
+                        items:
+                          type: string
+                        type: array
+                      tls:
+                        additionalProperties:
+                          properties:
+                            cert:
+                              format: byte
+                              type: string
+                            key:
+                              format: byte
+                              type: string
+                          type: object
+                        type: object
+                      token:
+                        description: Token bootstrap with expiration of 2h
+                        type: string
+                    type: object
+                  minReadySeconds:
+                    description: Minimum number of seconds for which a newly created
+                      pod should be ready without any of its container crashing, for
+                      it to be considered available. Defaults to 0 (pod will be considered
+                      available as soon as it is ready)
+                    format: int32
+                    type: integer
+                  paused:
+                    description: Indicates that the deployment is paused.
+                    type: boolean
+                  progressDeadlineSeconds:
+                    description: The maximum time in seconds for a deployment to make
+                      progress before it is considered to be failed. The deployment
+                      controller will continue to process failed deployments and a
+                      condition with a ProgressDeadlineExceeded reason will be surfaced
+                      in the deployment status. Note that progress will not be estimated
+                      during the time a deployment is paused. Defaults to 600s.
+                    format: int32
+                    type: integer
+                  replicas:
+                    description: Number of desired pods. This is a pointer to distinguish
+                      between explicit zero and not specified. Defaults to 1.
+                    format: int32
+                    type: integer
+                  revisionHistoryLimit:
+                    description: The number of old ReplicaSets to retain to allow
+                      rollback. This is a pointer to distinguish between explicit
+                      zero and not specified. Defaults to 10.
+                    format: int32
+                    type: integer
+                  selector:
+                    description: Label selector for pods. Existing ReplicaSets whose
+                      pods are selected by this will be the ones affected by this
+                      deployment. It must match the pod template's labels.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: A label selector requirement is a selector
+                            that contains values, a key, and an operator that relates
+                            the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: operator represents a key's relationship
+                                to a set of values. Valid operators are In, NotIn,
+                                Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: values is an array of string values. If
+                                the operator is In or NotIn, the values array must
+                                be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced
+                                during a strategic merge patch.
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: matchLabels is a map of {key,value} pairs. A
+                          single {key,value} in the matchLabels map is equivalent
+                          to an element of matchExpressions, whose key field is "key",
+                          the operator is "In", and the values array contains only
+                          "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  template:
+                    description: Template describes the pods that will be created.
+                      The only allowed template.spec.restartPolicy value is "Always".
+                    properties:
+                      metadata:
+                        description: 'Standard object''s metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata'
+                        type: object
+                      spec:
+                        description: 'Specification of the desired behavior of the
+                          master. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status'
+                        properties:
+                          Identity:
+                            description: 'ID provider Id of type: region.instanceid'
+                            type: string
+                          addon:
+                            additionalProperties:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            type: object
+                          ip:
+                            type: string
+                        type: object
+                    type: object
+                required:
+                - selector
+                - template
+                type: object
+              provider:
+                description: Provider is the auth info for cloud provider
+                properties:
+                  access-key:
+                    description: AccessKey is the key for provider
+                    type: string
+                  access-secret:
+                    description: AccessSecret is the secret for provider
+                    type: string
+                  act-as:
+                    description: Impersonate is the username to act-as.
+                    type: string
+                  act-as-groups:
+                    description: ImpersonateGroups is the groups to impersonate.
+                    items:
+                      type: string
+                    type: array
+                  act-as-uid:
+                    description: ImpersonateUID is the uid to impersonate.
+                    type: string
+                  act-as-user-extra:
+                    additionalProperties:
+                      items:
+                        type: string
+                      type: array
+                    description: ImpersonateUserExtra contains additional information
+                      for impersonated user.
+                    type: object
+                  client-certificate:
+                    description: ClientCertificate is the path to a client cert file
+                      for TLS.
+                    type: string
+                  client-certificate-data:
+                    description: ClientCertificateData contains PEM-encoded data from
+                      a client cert file for TLS. Overrides ClientCertificate
+                    format: byte
+                    type: string
+                  client-key:
+                    description: ClientKey is the path to a client key file for TLS.
+                    type: string
+                  client-key-data:
+                    description: ClientKeyData contains PEM-encoded data from a client
+                      key file for TLS. Overrides ClientKey
+                    format: byte
+                    type: string
+                  password:
+                    description: Password is the password for basic authentication
+                      to the kubernetes cluster.
+                    type: string
+                  region:
+                    description: Region is metadata region
+                    type: string
+                  token:
+                    description: Token is the bearer token for authentication to the
+                      kubernetes cluster.
+                    type: string
+                  tokenFile:
+                    description: TokenFile is a pointer to a file that contains a
+                      bearer token (as described above).  If both Token and TokenFile
+                      are present, Token takes precedence.
+                    type: string
+                  type:
+                    description: Type the provider name of cloud
+                    type: string
+                  username:
+                    description: Username is the username for basic authentication
+                      to the kubernetes cluster.
+                    type: string
+                type: object
+              role:
+                description: Role of init, one of master | worker
+                type: string
+            type: object
+          status:
+            description: RequestStatus defines the observed state of Request
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

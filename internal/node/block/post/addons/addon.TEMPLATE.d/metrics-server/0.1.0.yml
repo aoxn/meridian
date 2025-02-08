@@ -1,0 +1,42 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin
+  namespace: kube-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ags-metrics-collector
+  labels:
+    app: ags-metrics-collector
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ags-metrics-collector
+  template:
+    metadata:
+      labels:
+        app: ags-metrics-collector
+    spec:
+      containers:
+        - name: ags-metrics-collector
+          image: registry.{{.Region}}.aliyuncs.com/acs/ags-metrics-collector:{{.ImageVersion}}
+          imagePullPolicy: Always
+      serviceAccount: admin
+      serviceAccountName: admin

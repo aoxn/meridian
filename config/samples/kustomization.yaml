@@ -1,0 +1,12 @@
+## Append samples of your project ##
+resources:
+- knode_v1_cluster.yaml
+- wdrip_v1_cluster.yaml
+- meridian_v1_master.yaml
+- meridian_v1_cluster.yaml
+- meridian_v1_masterset.yaml
+- meridian_v1_internalcluster.yaml
+- meridian_v1_infra.yaml
+- meridian_v1_task.yaml
+- meridian_v1_request.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

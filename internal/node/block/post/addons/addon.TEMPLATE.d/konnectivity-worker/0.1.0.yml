@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+# Alternatively, you can deploy the agents as Deployments. It is not necessary
+# to have an agent on each node.
+kind: DaemonSet
+metadata:
+  namespace: kube-system
+  name: konnectivity-worker
+spec:
+  selector:
+    matchLabels:
+      k8s-app: konnectivity-worker
+  template:
+    metadata:
+      labels:
+        k8s-app: konnectivity-worker
+    spec:
+      hostAliases:
+        - ip: "{{.APIAccessPoint}}"
+          hostnames:
+            - "{{.APIDomain}}"
+      hostNetwork: true
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      priorityClassName: system-cluster-critical
+      tolerations:
+      - operator: "Exists"
+      containers:
+        - image: registry.cn-hangzhou.aliyuncs.com/aoxn/proxy-agent:v0.0.37
+          name: konnectivity-agent
+          command: ["/proxy-agent"]
+          args: [
+                  "--logtostderr=true",
+                  "--ca-cert=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+                  # Since the konnectivity server runs with hostNetwork=true,
+                  # this is the IP address of the master machine.
+                  "--proxy-server-host={{.APIDomain}}",
+                  "--proxy-server-port={{.TunnelPort}}",
+                  "--admin-server-port=8133",
+                  "--health-server-port=8134",
+                  "--service-account-token-path=/var/run/secrets/tokens/konnectivity-agent-token"
+                  ]
+          volumeMounts:
+            - mountPath: /var/run/secrets/tokens
+              name: konnectivity-agent-token
+          livenessProbe:
+            httpGet:
+              port: 8134
+              path: /healthz
+            initialDelaySeconds: 15
+            timeoutSeconds: 15
+      serviceAccountName: konnectivity-agent
+      volumes:
+        - name: konnectivity-agent-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: konnectivity-agent-token
+                  audience: system:konnectivity-server
+

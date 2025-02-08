@@ -1,0 +1,405 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: alicloud-disk-available
+provisioner: diskplugin.csi.alibabacloud.com
+parameters:
+  type: available
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: alicloud-disk-essd
+provisioner: diskplugin.csi.alibabacloud.com
+parameters:
+  type: cloud_essd
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: alicloud-disk-ssd
+provisioner: diskplugin.csi.alibabacloud.com
+parameters:
+  type: cloud_ssd
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: alicloud-disk-efficiency
+provisioner: diskplugin.csi.alibabacloud.com
+parameters:
+  type: cloud_efficiency
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: alicloud-disk-topology
+provisioner: diskplugin.csi.alibabacloud.com
+parameters:
+  type: available
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-provisioner
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-provisioner
+      random.uuid: "{{ .UUID }}"
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: csi-provisioner
+        random.uuid: "{{ .UUID }}"
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/master
+                    operator: Exists
+              weight: 1
+            - preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+              weight: 1
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: type
+                    operator: NotIn
+                    values:
+                      - virtual-kubelet
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - csi-provisioner
+                topologyKey: kubernetes.io/hostname
+              weight: 100
+      containers:
+        - args:
+            - '--csi-address=$(ADDRESS)'
+            - '--feature-gates=Topology=True'
+            - '--volume-name-prefix=disk'
+            - '--strict-topology=true'
+            - '--timeout=150s'
+            - '--leader-election=true'
+            - '--retry-interval-start=500ms'
+            - '--extra-create-metadata=true'
+            - '--default-fstype=ext4'
+            - '--v=5'
+          env:
+            - name: ADDRESS
+              value: /var/lib/kubelet/csi-provisioner/diskplugin.csi.alibabacloud.com/csi.sock
+          image: registry-{{ .Region }}.ack.aliyuncs.com/acs/csi-provisioner:v3.5.0-e7da67e52-aliyun
+          imagePullPolicy: IfNotPresent
+          name: external-disk-provisioner
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /var/lib/kubelet/csi-provisioner/diskplugin.csi.alibabacloud.com
+              name: disk-provisioner-dir
+        - args:
+            - '--v=5'
+            - '--csi-address=$(ADDRESS)'
+            - '--leader-election=true'
+          env:
+            - name: ADDRESS
+              value: /var/lib/kubelet/csi-provisioner/diskplugin.csi.alibabacloud.com/csi.sock
+          image: registry-{{ .Region }}.ack.aliyuncs.com/acs/csi-attacher:v3.3-72dd428b-aliyun
+          imagePullPolicy: IfNotPresent
+          name: external-disk-attacher
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /var/lib/kubelet/csi-provisioner/diskplugin.csi.alibabacloud.com
+              name: disk-provisioner-dir
+        - args:
+            - '--v=5'
+            - '--csi-address=$(ADDRESS)'
+            - '--leader-election'
+          env:
+            - name: ADDRESS
+              value: /var/lib/kubelet/csi-provisioner/diskplugin.csi.alibabacloud.com/csi.sock
+          image: registry-{{ .Region }}.ack.aliyuncs.com/acs/csi-resizer:v1.3-ca84e84-aliyun
+          imagePullPolicy: IfNotPresent
+          name: external-disk-resizer
+          resources:
+            limits:
+              cpu: 500m
+              memory: 8Gi
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /var/lib/kubelet/csi-provisioner/diskplugin.csi.alibabacloud.com
+              name: disk-provisioner-dir
+        - args:
+            - '--csi-address=$(ADDRESS)'
+            - '--volume-name-prefix=nas'
+            - '--timeout=150s'
+            - '--leader-election=true'
+            - '--retry-interval-start=500ms'
+            - '--default-fstype=nfs'
+            - '--v=5'
+          env:
+            - name: ADDRESS
+              value: /var/lib/kubelet/csi-provisioner/nasplugin.csi.alibabacloud.com/csi.sock
+          image: registry-{{ .Region }}.ack.aliyuncs.com/acs/csi-provisioner:v3.5.0-e7da67e52-aliyun
+          imagePullPolicy: IfNotPresent
+          name: external-nas-provisioner
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /var/lib/kubelet/csi-provisioner/nasplugin.csi.alibabacloud.com
+              name: nas-provisioner-dir
+        - args:
+            - '--v=5'
+            - '--csi-address=$(ADDRESS)'
+            - '--leader-election'
+          env:
+            - name: ADDRESS
+              value: /var/lib/kubelet/csi-provisioner/nasplugin.csi.alibabacloud.com/csi.sock
+          image: registry-{{ .Region }}.ack.aliyuncs.com/acs/csi-resizer:v1.3-ca84e84-aliyun
+          imagePullPolicy: IfNotPresent
+          name: external-nas-resizer
+          resources:
+            limits:
+              cpu: 500m
+              memory: 8Gi
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /var/lib/kubelet/csi-provisioner/nasplugin.csi.alibabacloud.com
+              name: nas-provisioner-dir
+        - args:
+            - '--csi-address=$(ADDRESS)'
+            - '--volume-name-prefix=oss'
+            - '--timeout=150s'
+            - '--leader-election=true'
+            - '--retry-interval-start=500ms'
+            - '--default-fstype=ossfs'
+            - '--v=5'
+          env:
+            - name: ADDRESS
+              value: /var/lib/kubelet/csi-provisioner/ossplugin.csi.alibabacloud.com/csi.sock
+          image: registry-{{ .Region }}.ack.aliyuncs.com/acs/csi-provisioner:v3.5.0-e7da67e52-aliyun
+          imagePullPolicy: IfNotPresent
+          name: external-oss-provisioner
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /var/lib/kubelet/csi-provisioner/ossplugin.csi.alibabacloud.com
+              name: oss-provisioner-dir
+        - args:
+            - '--v=5'
+            - '--csi-address=$(ADDRESS)'
+            - '--leader-election=true'
+            - '--extra-create-metadata=true'
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          image: registry-{{ .Region }}.ack.aliyuncs.com/acs/csi-snapshotter:v4.0.0-a230d5b3-aliyun
+          imagePullPolicy: IfNotPresent
+          name: external-csi-snapshotter
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /csi
+              name: disk-provisioner-dir
+        - args:
+            - '--v=5'
+            - '--leader-election=true'
+          image: registry-{{ .Region }}.ack.aliyuncs.com/acs/snapshot-controller:v4.0.0-a230d5b3-aliyun
+          imagePullPolicy: IfNotPresent
+          name: external-snapshot-controller
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        - args:
+            - '--service=$(CSI_ENDPOINT)'
+            - '--v=2'
+            - '--driver=nas,disk,oss'
+          env:
+            - name: CSI_ENDPOINT
+              value: unix://var/lib/kubelet/csi-provisioner/driverplugin.csi.alibabacloud.com-replace/csi.sock
+            - name: MAX_VOLUMES_PERNODE
+              value: '15'
+            - name: SERVICE_TYPE
+              value: provisioner
+            - name: CLUSTER_ID
+              value: c99faeac46d454d40ac0c192f54b62d95
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: account.infra
+                  key: access_key_id
+            - name: ACCESS_KEY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: account.infra
+                  key: access_key_secret
+          image: registry-{{ .Region }}.ack.aliyuncs.com/acs/csi-plugin:{{.ImageVersion}}
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /healthz
+              port: healthz
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 5
+          name: csi-provisioner
+          ports:
+            - containerPort: 11270
+              name: healthz
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: healthz
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 20
+            successThreshold: 1
+            timeoutSeconds: 1
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            privileged: true
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /var/log/
+              name: host-log
+            - mountPath: /var/lib/kubelet/csi-provisioner/diskplugin.csi.alibabacloud.com
+              name: disk-provisioner-dir
+            - mountPath: /var/lib/kubelet/csi-provisioner/nasplugin.csi.alibabacloud.com
+              name: nas-provisioner-dir
+            - mountPath: /var/lib/kubelet/csi-provisioner/ossplugin.csi.alibabacloud.com
+              name: oss-provisioner-dir
+            - mountPath: /mnt
+              mountPropagation: Bidirectional
+              name: host-mnt
+            - mountPath: /host/etc
+              name: etc
+      dnsPolicy: ClusterFirst
+      hostPID: true
+      priorityClassName: system-node-critical
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: csi-admin
+      terminationGracePeriodSeconds: 30
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+        - effect: NoSchedule
+          key: node.cloudprovider.kubernetes.io/uninitialized
+          operator: Exists
+      volumes:
+        - emptyDir: {}
+          name: disk-provisioner-dir
+        - emptyDir: {}
+          name: nas-provisioner-dir
+        - emptyDir: {}
+          name: oss-provisioner-dir
+        - hostPath:
+            path: /var/log/
+            type: 'Directory'
+          name: host-log
+        - hostPath:
+            path: /etc
+            type: 'Directory'
+          name: etc
+        - hostPath:
+            path: /mnt
+            type: 'Directory'
+          name: host-mnt

@@ -1,0 +1,12 @@
+apiVersion: meridian.meridian.io/v1
+kind: Cluster
+metadata:
+  labels:
+    app.kubernetes.io/name: cluster
+    app.kubernetes.io/instance: cluster-sample
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: meridian
+  name: cluster-sample
+spec:
+  # TODO(user): Add fields here
