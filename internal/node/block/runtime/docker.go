@@ -102,7 +102,7 @@ var daemonjson = `
         "max-file": "10"
     },
     "bip": "169.254.123.1/24",
-    "registry-mirrors": [],
+    "registry-mirrors": ["https://docker.m.daocloud.io"],
     "storage-driver": "overlay2",
     "live-restore": true
 }
@@ -125,7 +125,7 @@ var nvidiadaemonjson = `
     },
     "bip": "169.254.123.1/24",
     "oom-score-adjust": -1000,
-    "registry-mirrors": [""],
+    "registry-mirrors": ["https://docker.m.daocloud.io"],
     "storage-driver": "overlay2",
     "storage-opts":["overlay2.override_kernel_check=true"],
     "live-restore": true
