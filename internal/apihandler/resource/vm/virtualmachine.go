@@ -739,7 +739,7 @@ func (m *virtualMachine) EnsureKubernetes(ctx context.Context, client client.Int
 		klog.Infof("[%-10s]kubernetes condition found, Status=%s, %s, %s", vm.Name, cond.Status, gi.Status.Phase, cond.Reason)
 		return cond.Status == metav1.ConditionTrue && gi.Status.Phase == v1.Running, nil
 	}
-	err = wait.PollUntilContextTimeout(ctx, 3*time.Second, 15*time.Minute, false, pollFunc)
+	err = wait.PollUntilContextTimeout(ctx, 3*time.Second, 8*time.Minute, false, pollFunc)
 	if err != nil {
 		return err
 	}

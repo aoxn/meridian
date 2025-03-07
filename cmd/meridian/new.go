@@ -91,6 +91,7 @@ func NewRequest() (*v1.Request, error) {
 					Unit: v1.Unit{
 						Version: "v3.4.3",
 					},
+					InitToken: tool.RandomID(12),
 				},
 				Kubernetes: v1.Kubernetes{
 					Unit: v1.Unit{

@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Copyright The Lima Authors
+# SPDX-License-Identifier: Apache-2.0
 set -ex -o pipefail
 
 # Define host.md.internal in case the hostResolver is disabled. When using

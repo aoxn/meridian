@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: Copyright The Lima Authors
+# SPDX-License-Identifier: Apache-2.0
 
 set -eux
 MD_CIDATA_GUEST_INSTALL_PREFIX=/usr/local

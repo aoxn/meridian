@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: Copyright The Lima Authors
+# SPDX-License-Identifier: Apache-2.0
+
 # Remove the user embedded in the image,
 # and use cloud-init for users and groups.
 test -f /etc/alpine-release || exit 0

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright The Lima Authors
+# SPDX-License-Identifier: Apache-2.0
+
 #!/bin/bash
 set -eu
 export LOG_FILE=/var/log/lima-init.log

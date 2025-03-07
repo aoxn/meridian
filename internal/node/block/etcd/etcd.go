@@ -80,9 +80,10 @@ func (a *etcd) Ensure(ctx context.Context) error {
 	//	return fmt.Errorf("can not get host info from ActionContex")
 	//}
 	klog.Info("try sign etcd cert")
-	state := "new"
 	// 1. make sure etcd unit file is exist in the whole process
 	etcd := a.NewEtcd(a.req)
+	state := etcd.ReadClusterStateConfig()
+	klog.Infof("read local etcd cluster state: [%v]", state)
 	if err := etcd.LoadOrSign(a.req); err != nil {
 		return fmt.Errorf("sign: %s", err.Error())
 	}
@@ -520,6 +521,17 @@ func TryEachPeer(
 		}
 	}
 	return errors.Wrapf(lastError, "NoMoreEndpointsToTry")
+}
+
+func (m *Etcd) ReadClusterStateConfig() string {
+	info, err := os.Stat(ETCD_UNIT_FILE)
+	if err != nil {
+		return "new"
+	}
+	if info.IsDir() {
+		return "new"
+	}
+	return "existing"
 }
 
 // FlushEtcdContent flush etcd content into system unit file
