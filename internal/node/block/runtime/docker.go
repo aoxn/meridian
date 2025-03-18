@@ -36,7 +36,7 @@ func NewDockerBlock(
 	if err != nil {
 		return nil, err
 	}
-	return &containerdBlock{
+	return &nvidiaBlock{
 		req:  req,
 		host: host,
 		file: &file.File{

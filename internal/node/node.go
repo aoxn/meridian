@@ -177,7 +177,7 @@ func (m *Meridian) DestroyNode() error {
 	if err != nil {
 		return errors.Wrap(err, "new etcd block while")
 	}
-	runtimeBlock, err := runtime.NewContainerdBlock(m.request, local)
+	runtimeBlock, err := runtime.NewNvidiaBlock(m.request, local)
 	kubeletBlock, err := kubeadm.NewKubeletBlock(m.request, local, m.role, m.nodeGroup)
 	if err != nil {
 		return errors.Wrap(err, "new kubelet block while")
@@ -206,7 +206,7 @@ func (m *Meridian) buildActionBlocks(local host.Host) ([]block.Block, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "new etcd block while")
 	}
-	runtimeBlock, err := runtime.NewContainerdBlock(m.request, local)
+	runtimeBlock, err := runtime.NewNvidiaBlock(m.request, local)
 	if err != nil {
 		return nil, errors.Wrap(err, "new containerd block while")
 	}
@@ -231,6 +231,10 @@ func (m *Meridian) buildActionBlocks(local host.Host) ([]block.Block, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "new kube join block while")
 	}
+	nvidiaBlock, err := runtime.NewNvidiaBlock(m.request, local)
+	if err != nil {
+		return nil, errors.Wrap(err, "new nvidia block while")
+	}
 	//postBlock, err := post.NewPostBlock(m.request, local)
 	//if err != nil {
 	//	return nil, errors.Wrap(err, "new post block while")
@@ -246,6 +250,7 @@ func (m *Meridian) buildActionBlocks(local host.Host) ([]block.Block, error) {
 			etcdBlock,
 			runtimeBlock,
 			kubeletBlock,
+			nvidiaBlock,
 		}
 
 		addon := []block.Block{

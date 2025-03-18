@@ -45,6 +45,7 @@ var (
 		KUBEPROXY_WORKER,
 		INGRESS,
 		TERWAY,
+		NVIDIA_DEVICE,
 		KONNECTIVITY_AGENT_MASTER,
 		KONNECTIVITY_AGENT_WORKER,
 	}
@@ -64,6 +65,12 @@ var (
 	CORDDNS = &v1.Addon{
 		Name:     "coredns",
 		Version:  "v1.9.3.10-7dfca203-aliyun",
+		Category: "System",
+	}
+
+	NVIDIA_DEVICE = &v1.Addon{
+		Name:     "nvidia-device-plugin",
+		Version:  "0.17.0",
 		Category: "System",
 	}
 
@@ -192,6 +199,7 @@ func SetDftClusterAddons(r *v1.RequestSpec) {
 		METRICS_SERVER,
 		FLANNEL,
 		FLANNEL_MASTER,
+		NVIDIA_DEVICE,
 		KUBEPROXY_MASTER,
 		KUBEPROXY_WORKER,
 		KONNECTIVITY_AGENT_MASTER,

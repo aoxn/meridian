@@ -43,6 +43,7 @@ func (a *postAddons) Ensure(ctx context.Context) error {
 		addons.KUBEPROXY_WORKER.Name,
 		addons.FLANNEL_MASTER.Name,
 		addons.FLANNEL.Name,
+		addons.NVIDIA_DEVICE.Name,
 		addons.KONNECTIVITY_AGENT_MASTER.Name,
 		addons.KONNECTIVITY_AGENT_WORKER.Name,
 		addons.CORDDNS.Name,

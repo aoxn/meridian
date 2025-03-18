@@ -22,11 +22,12 @@ const (
 )
 
 const (
-	PKG_DOCKER     = "docker"
-	PKG_CONTAINERD = "containerd"
-	PKG_KUBERNETES = "kubernetes"
-	PKG_CNI        = "kubernetes-cni"
-	PKG_ETCD       = "etcd"
+	PKG_DOCKER         = "docker"
+	PKG_CONTAINERD     = "containerd"
+	PKG_KUBERNETES     = "kubernetes"
+	PKG_CNI            = "kubernetes-cni"
+	PKG_ETCD           = "etcd"
+	PKG_NVIDIA_TOOLKIT = "nvidia-toolkit"
 )
 
 func NewFile(
