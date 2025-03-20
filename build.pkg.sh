@@ -34,7 +34,7 @@ function loopDownloads() {
 }
 
 function buildDir() {
-	      local name=$1
+        local name=$1
         local version=$2
         local type=$3
         local arch=$4
@@ -48,7 +48,7 @@ function buildDir() {
 }
 
 function tarPkg() {
-	      local name=$1
+        local name=$1
         local version=$2
         local type=$3
         local arch=$4
@@ -60,8 +60,8 @@ function tarPkg() {
         mkdir -p $path
         mkdir -p $path/extract/$version/$arch
         tar cf $path/$file -C $path/extract/$version/$arch .
-	      echo "======file list: $file======="
-	      tar tf $path/$file
+        echo "======file list: $file======="
+        tar tf $path/$file
 }
 
 function releasePkg() {
@@ -75,7 +75,7 @@ function releasePkg() {
         file=${name}_${version}_${type}_${arch}.tar
         path=$home/.cache/meridian/build/$name
         echo "======file list: $file======="
-	      ossutil cp -f "$path/$file" oss://host-wdrip-cn-hangzhou/meridian/default/public/$name/$file
+        ossutil cp -f "$path/$file" oss://host-wdrip-cn-hangzhou/meridian/default/public/$name/$file
 }
 
 function loopBuildDir() {
@@ -83,7 +83,7 @@ function loopBuildDir() {
 	if [[ "$arch" == "" ]];then
                 echo "unexpected empty [arch]";exit 1;
         fi
-	      buildDir "etcd" "v3.4.3" "elf" "$arch"
+        buildDir "etcd" "v3.4.3" "elf" "$arch"
         buildDir "kubernetes" "1.31.1-aliyun.1" "elf" "$arch"
         buildDir "containerd" "1.6.21" "deb" "$arch"
         buildDir "containerd" "1.6.28" "deb" "$arch"
@@ -96,7 +96,7 @@ function loopTarPkg() {
         if [[ "$arch" == "" ]];then
                 echo "unexpected empty [arch]";exit 1;
         fi
-	      tarPkg "etcd" "v3.4.3" "elf" "$arch"
+        tarPkg "etcd" "v3.4.3" "elf" "$arch"
         tarPkg "kubernetes" "1.31.1-aliyun.1" "elf" "$arch"
         tarPkg "containerd" "1.6.21" "deb" "$arch"
         tarPkg "containerd" "1.6.28" "deb" "$arch"
@@ -109,7 +109,7 @@ function loopReleasePkg() {
         if [[ "$arch" == "" ]];then
                 echo "unexpected empty [arch]";exit 1;
         fi
-	      releasePkg "etcd" "v3.4.3" "elf" "$arch"
+        releasePkg "etcd" "v3.4.3" "elf" "$arch"
         releasePkg "kubernetes" "1.31.1-aliyun.1" "elf" "$arch"
         releasePkg "containerd" "1.6.21" "deb" "$arch"
         releasePkg "containerd" "1.6.28" "deb" "$arch"

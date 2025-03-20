@@ -1,4 +1,4 @@
-package meridian
+package command
 
 import (
 	"context"

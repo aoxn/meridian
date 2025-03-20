@@ -10,6 +10,9 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+GOOS?=$(shell hack/tool/goos.sh)
+GOARCH?=$(shell hack/tool/goarch.sh)
+
 REG ?=registry.cn-hangzhou.aliyuncs.com/aoxn
 IMG ?=$(REG)/meridian
 TAG?=$(shell hack/tool/tag.sh)
@@ -135,41 +138,58 @@ mlx86: fmt vet
 	CGO_ENABLED=0 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridian.linux.x86_64 cmd/main.go
 	codesign --entitlements vz.entitlements -s - bin/meridian.linux.x86_64 || true
 
-.PHONY: mlarm64
-mlarm64: fmt vet
-	@echo Build meridian binary.
-	GOOS=linux                \
-	GOARCH=arm64             \
-	CGO_ENABLED=0 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridian.linux.aarch64 cmd/main.go
-	codesign --entitlements vz.entitlements -s - bin/meridian.linux.aarch64 || true
+.PHONY: meridian-guest
+meridian-guest: fmt vet
+	@echo Build meridian-guest binary[$(GOOS)][$(GOARCH)].
+	GOOS=$(GOOS)                \
+	GOARCH=$(GOARCH)             \
+	CGO_ENABLED=0 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridian-guest.$(GOOS).$(GOARCH) cmd/meridian-guest/guest.go
+	sudo cp -rf bin/meridian-guest.$(GOOS).$(GOARCH) /usr/local/bin/meridian-guest
 
-.PHONY: m
-m: fmt vet
-	@echo Build meridian binary.
-	CGO_ENABLED=1 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridian cmd/main.go
-	codesign --entitlements vz.entitlements -s - bin/meridian || true
-	sudo cp -rf bin/meridian /usr/local/bin/meridian
+.PHONY: meridian-node
+meridian-node: fmt vet
+	@echo Build meridian-node binary[$(GOOS)][$(GOARCH)].
+	GOOS=$(GOOS)                \
+	GOARCH=$(GOARCH)             \
+	CGO_ENABLED=0 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridian-node.$(GOOS).$(GOARCH) cmd/meridian-node/node.go
+	sudo cp -rf bin/meridian-node.$(GOOS).$(GOARCH) /usr/local/bin/meridian-node
+
+.PHONY: meridian
+meridian: fmt vet
+	@echo Build meridian binary[$(GOOS)][$(GOARCH)].
+	GOOS=$(GOOS)                \
+	GOARCH=$(GOARCH)             \
+	CGO_ENABLED=1 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridian.$(GOOS).$(GOARCH) cmd/meridian/main.go
+	sudo cp -rf bin/meridian.$(GOOS).$(GOARCH) /usr/local/bin/meridian
+
+.PHONY: meridiand
+meridiand: fmt vet
+	@echo Build meridiand binary[$(GOOS)][$(GOARCH)].
+	GOOS=$(GOOS)                \
+	GOARCH=$(GOARCH)             \
+	CGO_ENABLED=1 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridiand.$(GOOS).$(GOARCH) cmd/meridiand/daemon.go
+	sudo cp -rf bin/meridiand.$(GOOS).$(GOARCH) /usr/local/bin/meridiand
+
 
 .PHONYE: universal
 universal: fmt vet
-	rm -rf bin/meridian.darwin.* /usr/local/bin/meridian bin/meridian
+	sudo rm -rf bin/meridian.darwin.* /usr/local/bin/meridian /usr/local/bin/meridiand bin/meridian bin/meridiand
 	@echo Build meridian binary[amd64].
 	GOOS=darwin 		  \
 	GOARCH=amd64              \
-	CGO_ENABLED=1 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridian.darwin.x86_64 cmd/main.go
-	codesign --entitlements vz.entitlements -s - bin/meridian.darwin.x86_64 || true
+	CGO_ENABLED=1 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridiand.darwin.x86_64 cmd/meridiand/daemon.go
+	codesign --entitlements vz.entitlements -s - bin/meridiand.darwin.x86_64 || true
 	#-ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w -extldflags '-static'"
 
 	@echo Build meridian binary[aarch64].
 	GOOS=darwin              \
 	GOARCH=arm64             \
-	CGO_ENABLED=1 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w " -o bin/meridian.darwin.aarch64 cmd/main.go
-	codesign --entitlements vz.entitlements -s - bin/meridian.darwin.aarch64 || true
+	CGO_ENABLED=1 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w " -o bin/meridiand.darwin.aarch64 cmd/meridiand/daemon.go
+	codesign --entitlements vz.entitlements -s - bin/meridiand.darwin.aarch64 || true
 
-	@echo create universal arch app bin/meridian 
-	lipo -create -output bin/meridian bin/meridian.darwin.aarch64 bin/meridian.darwin.x86_64
-	sudo cp -rf bin/meridian /usr/local/bin/meridian
-	#codesign --entitlements vz.entitlements -s - /usr/local/bin/meridian
+	@echo create universal arch app bin/meridiand
+	lipo -create -output bin/meridiand bin/meridiand.darwin.aarch64 bin/meridiand.darwin.x86_64
+	sudo cp -rf bin/meridiand /usr/local/bin/meridiand
 
 
 .PHONY: amd

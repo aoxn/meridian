@@ -1,21 +1,13 @@
-package meridian
+package common
 
 import (
 	"fmt"
-	"github.com/aoxn/meridian"
 	v1 "github.com/aoxn/meridian/api/v1"
-	"github.com/aoxn/meridian/internal/node/block/kubeadm"
 	"github.com/aoxn/meridian/internal/tool"
 	"github.com/aoxn/meridian/internal/tool/sign"
-	"github.com/ghodss/yaml"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cluster-bootstrap/token/util"
-	"k8s.io/klog/v2"
 	"math/rand"
-	"os"
-	"path"
 )
 
 func newCA() (*v1.KeyCert, error) {
@@ -32,15 +24,6 @@ func newCA4SA() (*v1.KeyCert, error) {
 		return nil, err
 	}
 	return &v1.KeyCert{Key: key, Cert: crt}, nil
-}
-
-func NewJoinRequest(req *v1.Request) *v1.Request {
-	req.Spec.Config.TLS["root"].Key = []byte{}
-	delete(req.Spec.Config.TLS, "svc")
-	delete(req.Spec.Config.TLS, "front-proxy")
-	delete(req.Spec.Config.TLS, "etcd-peer")
-	delete(req.Spec.Config.TLS, "etcd-server")
-	return req
 }
 
 func NewRequest() (*v1.Request, error) {
@@ -117,67 +100,4 @@ func NewRequest() (*v1.Request, error) {
 		},
 	}
 	return req, nil
-}
-
-// NewCommandNew create resource
-func NewCommandNew() *cobra.Command {
-	var (
-		join  = false
-		write = ""
-	)
-	cmd := &cobra.Command{
-		Use:    "new",
-		Hidden: true,
-		Short:  "meridian new",
-		Long:   "",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf(meridian.Logo)
-			if len(args) < 1 {
-				return fmt.Errorf("resource is needed. [req]|[request]")
-			}
-			var (
-				err error
-				req = &v1.Request{}
-			)
-			if join {
-				r, err := os.ReadFile(path.Join(kubeadm.KUBEADM_CONFIG_DIR, "request.yml"))
-				if err != nil {
-					return err
-				}
-				err = yaml.Unmarshal(r, req)
-				if err != nil {
-					return err
-				}
-				req = NewJoinRequest(req)
-			} else {
-				req, err = NewRequest()
-				if err != nil {
-					return errors.Wrapf(err, "build request")
-				}
-			}
-			data := tool.PrettyYaml(req)
-			if err != nil {
-				return fmt.Errorf("new request template: %s", err.Error())
-			}
-			if write != "" {
-				if !path.IsAbs(write) {
-					dir, err := os.Getwd()
-					if err != nil {
-						klog.Infof("can not get current working directory")
-						fmt.Println(data)
-						return nil
-					}
-					write = path.Join(dir, write)
-				}
-
-				return os.WriteFile(write, []byte(data), 0755)
-			} else {
-				fmt.Printf("%s", data)
-			}
-			return nil
-		},
-	}
-	cmd.PersistentFlags().StringVarP(&write, "write", "w", "", "write to file: request.yml in current dir")
-	cmd.PersistentFlags().BoolVarP(&join, "join", "j", false, "generate join file: request-join.yml in current dir from request.yml")
-	return cmd
 }

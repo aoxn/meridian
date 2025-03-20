@@ -1,4 +1,4 @@
-package meridian
+package command
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/aoxn/meridian"
 	v1 "github.com/aoxn/meridian/api/v1"
+	"github.com/aoxn/meridian/cmd/common"
 	user "github.com/aoxn/meridian/internal/client"
 	"github.com/aoxn/meridian/internal/tool"
 	"github.com/aoxn/meridian/internal/vma/model"
@@ -83,7 +84,7 @@ func create(r string, args []string, cmdline *cmdflag) error {
 			virt.Spec.Memory = cmdline.mems
 		}
 		if cmdline.withKubernetes && !loadFromHistory {
-			req, err := NewRequest()
+			req, err := common.NewRequest()
 			if err != nil {
 				return err
 			}

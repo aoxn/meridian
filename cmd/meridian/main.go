@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/aoxn/meridian/cmd/meridian/guest"
+	"github.com/aoxn/meridian/cmd/meridian/command"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -13,7 +13,6 @@ import (
 
 	"github.com/aoxn/meridian"
 	v1 "github.com/aoxn/meridian/api/v1"
-	m2 "github.com/aoxn/meridian/cmd/meridian"
 )
 
 // NewCommand returns a new cobra.Command implementing the root command for meridian
@@ -30,21 +29,14 @@ func NewCommand() *cobra.Command {
 	}
 	cmd.PersistentFlags().AddGoFlagSet(NewKlogFlags())
 	globalFlags(cmd)
-	cmd.AddCommand(m2.NewCommandServe())
 	// add all top level subcommands
-	cmd.AddCommand(m2.NewCommandGet())
-	cmd.AddCommand(m2.NewCommandVersion())
-	cmd.AddCommand(m2.NewCommandCreate())
-	cmd.AddCommand(m2.NewCommandUpdate())
-	cmd.AddCommand(m2.NewCommandDelete())
-	cmd.AddCommand(m2.NewCommandInit())
-	cmd.AddCommand(m2.NewCommandNew())
-	cmd.AddCommand(m2.NewCommandDestroy())
-	cmd.AddCommand(m2.NewCommandVM())
-	cmd.AddCommand(m2.NewCommandPull())
-	cmd.AddCommand(guest.NewCommandGuest())
-	cmd.AddCommand(m2.NewCommandInstall())
-	cmd.AddCommand(m2.NewCommandJoin())
+	cmd.AddCommand(command.NewCommandGet())
+	cmd.AddCommand(command.NewCommandVersion())
+	cmd.AddCommand(command.NewCommandCreate())
+	cmd.AddCommand(command.NewCommandUpdate())
+	cmd.AddCommand(command.NewCommandDelete())
+	cmd.AddCommand(command.NewCommandPull())
+	cmd.AddCommand(command.NewCommandInstall())
 	return cmd
 }
 

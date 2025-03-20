@@ -16,6 +16,17 @@ import (
 	"syscall"
 )
 
+// NewCommandVM returns a new cobra.Command for cluster creation
+func NewCommandVM() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "vm",
+		Short: "meridian vm",
+		Long:  "meridian vm",
+	}
+	cmd.AddCommand(NewCommandStart())
+	return cmd
+}
+
 // NewCommandStart returns a new cobra.Command for cluster creation
 func NewCommandStart() *cobra.Command {
 	cfgfile := ""

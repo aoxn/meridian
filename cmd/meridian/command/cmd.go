@@ -1,11 +1,10 @@
-package meridian
+package command
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/aoxn/meridian"
 	v1 "github.com/aoxn/meridian/api/v1"
-	"github.com/aoxn/meridian/cmd/meridian/vm"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	gschema "k8s.io/client-go/kubernetes/scheme"
@@ -33,17 +32,6 @@ func NewCommandVersion() *cobra.Command {
 			return nil
 		},
 	}
-	return cmd
-}
-
-// NewCommandVM returns a new cobra.Command for cluster creation
-func NewCommandVM() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "vm",
-		Short: "meridian vm",
-		Long:  "meridian vm",
-	}
-	cmd.AddCommand(vm.NewCommandStart())
 	return cmd
 }
 

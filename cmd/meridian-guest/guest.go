@@ -1,9 +1,8 @@
-package guest
+package main
 
 import (
 	"fmt"
 	"github.com/aoxn/meridian"
-	"github.com/aoxn/meridian/cmd/meridian/vm"
 	"github.com/aoxn/meridian/internal/vma/guest"
 	"github.com/spf13/cobra"
 	"os"
@@ -12,13 +11,25 @@ import (
 // NewCommandGuest returns a new cobra.Command for cluster creation
 func NewCommandGuest() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "guest",
-		Aliases: []string{"g"},
-		Short:   "meridian guest",
-		Long:    "meridian guest",
+		Use:   "meridian-guest",
+		Short: "meridian-guest app",
+		Long:  "meridian-guest app",
 	}
 	cmd.AddCommand(NewCommandGuestServe())
-	cmd.AddCommand(vm.NewCommandStart())
+	cmd.AddCommand(NewCommandVersion())
+	return cmd
+}
+
+func NewCommandVersion() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "version",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Printf(meridian.Logo)
+			fmt.Printf(meridian.Version)
+			return nil
+		},
+	}
 	return cmd
 }
 
