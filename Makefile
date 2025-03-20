@@ -168,6 +168,7 @@ meridiand: fmt vet
 	GOOS=$(GOOS)                \
 	GOARCH=$(GOARCH)             \
 	CGO_ENABLED=1 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridiand.$(GOOS).$(GOARCH) cmd/meridiand/daemon.go
+	codesign --entitlements vz.entitlements -s - bin/meridiand.$(GOOS).$(GOARCH) || true
 	sudo cp -rf bin/meridiand.$(GOOS).$(GOARCH) /usr/local/bin/meridiand
 
 
