@@ -93,7 +93,7 @@ function setup::install_meridian() {
         <string>cn.xdpin.meridian</string>
         <key>ProgramArguments</key>
         <array>
-                <string>/usr/local/bin/meridian</string>
+                <string>/usr/local/bin/meridiand</string>
                 <string>serve</string>
                 <string>-v</string>
                 <string>6</string>
@@ -122,7 +122,7 @@ Description=Meridian daemon.
 Documentation=meridian document
 
 [Service]
-ExecStart=/usr/local/bin/meridiand
+ExecStart=/usr/local/bin/meridiand serve
 WorkingDirectory=${workDir}
 Type=simple
 TimeoutSec=10
