@@ -89,7 +89,7 @@ func (i *CloudInit) GenCIISO() error {
 		return err
 	}
 
-	gfile := path.Join(i.ii.Dir, "bin", fmt.Sprintf("meridian.%s.%s", strings.ToLower(string(i.ii.Spec.OS)), withArch(i.ii.Spec.Arch)))
+	gfile := path.Join(i.ii.Dir, "bin", fmt.Sprintf("meridian-guest.%s.%s", strings.ToLower(string(i.ii.Spec.OS)), withArch(i.ii.Spec.Arch)))
 	var guest io.ReadCloser
 	guest, err = os.Open(gfile)
 	if err != nil {
