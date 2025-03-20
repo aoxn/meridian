@@ -29,7 +29,7 @@ func NewCommand() *cobra.Command {
 	}
 	cmd.PersistentFlags().AddGoFlagSet(NewKlogFlags())
 	cmd.AddCommand(NewCommandServe())
-	cmd.AddCommand(vm.NewCommandVM())
+	cmd.AddCommand(vm.NewCommandStart())
 	cmd.AddCommand(NewCommandVersion())
 	return cmd
 }
