@@ -482,7 +482,7 @@ func (m *virtualMachine) handleVm(ctx context.Context, vm *v1.VirtualMachine) er
 			return err
 		}
 		// no defer haStderrW.Close()
-		var args = []string{"guest", "start", "vm"}
+		var args = []string{"vm", "start"}
 		haCmd := exec.CommandContext(ctx, self, args...)
 
 		haCmd.Stdin = strings.NewReader(tool.PrettyYaml(vm))
