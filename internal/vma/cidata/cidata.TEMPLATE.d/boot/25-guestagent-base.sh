@@ -37,7 +37,7 @@ name="md-guest"
 description="Forward ports to the md-hostagent"
 
 command=${MD_CIDATA_GUEST_INSTALL_PREFIX}/bin/md-guest
-command_args="guest serve"
+command_args="serve"
 command_background=true
 pidfile="/run/md-guest.pid"
 EOF
@@ -55,7 +55,7 @@ else
 Description=md-guest
 
 [Service]
-ExecStart=${MD_CIDATA_GUEST_INSTALL_PREFIX}/bin/md-guest guest serve
+ExecStart=${MD_CIDATA_GUEST_INSTALL_PREFIX}/bin/md-guest serve
 Type=simple
 Environment="HOME=${MD_CIDATA_HOME}"
 Restart=on-failure
