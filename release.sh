@@ -109,6 +109,8 @@ function release::mac_universal_package() {
 }
 
 function release::meridian_binary() {
+    local os=$1
+    local arch=$2
 	make meridian; 	 ossutil cp -f bin/meridian oss://host-wdrip-cn-hangzhou/meridian/bin/meridian
 	
 	make meridiand ; ossutil cp -f bin/meridiand oss://host-wdrip-cn-hangzhou/meridian/bin/meridiand
@@ -122,7 +124,7 @@ echo "[oss]download with url: http://host-wdrip-cn-hangzhou.oss-cn-hangzhou.aliy
 
 case "$1" in
 "binary")
-	release::meridian_binary
+	release::meridian_binary "linux" "amd64"
 	;;
 "script")
 	release::installation_script

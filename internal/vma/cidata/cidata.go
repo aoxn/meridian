@@ -89,7 +89,7 @@ func (i *CloudInit) GenCIISO() error {
 		return err
 	}
 
-	gfile := path.Join(i.ii.Dir, "bin", fmt.Sprintf("meridian.%s.%s", strings.ToLower(string(i.ii.Spec.OS)), i.ii.Spec.Arch))
+	gfile := path.Join(i.ii.Dir, "bin", fmt.Sprintf("meridian.%s.%s", strings.ToLower(string(i.ii.Spec.OS)), withArch(i.ii.Spec.Arch)))
 	var guest io.ReadCloser
 	guest, err = os.Open(gfile)
 	if err != nil {
@@ -113,6 +113,22 @@ func (i *CloudInit) GenCIISO() error {
 	}
 
 	return writeISO(filepath.Join(instDir, v1.CIDataISO), "cidata", layout)
+}
+
+func withArch(arch v1.Arch) string {
+	switch arch {
+	case v1.X8664:
+		return "amd64"
+	case v1.AARCH64:
+		return "arm64"
+	case v1.ARMV7L:
+		return "arm"
+	case v1.RISCV64:
+		return string(arch)
+	default:
+		klog.Infof("Unknown arch: %s", arch)
+		return string(arch)
+	}
 }
 
 func writeDir(rootPath string, layout []entry) error {

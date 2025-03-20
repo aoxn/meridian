@@ -5,6 +5,6 @@ case $arch in
 	echo amd64
 	;;
 *)
-	echo $arch
+	echo "$arch"
 	;;
 esac

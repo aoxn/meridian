@@ -17,7 +17,7 @@ function setup::env() {
             arch=arm64
             ;;
     *)
-            echo "unknown arch: ${arch} for ${os}"; exit 1
+            echo "set arch: ${arch} for ${os}"
             ;;
     esac
 

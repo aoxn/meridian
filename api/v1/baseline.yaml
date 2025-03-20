@@ -30,11 +30,11 @@ images:
     digest: "sha256:2e0c90562af1970ffff220a5073a7830f4acc2aad55b31593003e8c363381e7a"
     location: "https://cloud-images.ubuntu.com/releases/24.04/release-20240809/ubuntu-24.04-server-cloudimg-arm64.img"
 guestBin:
-  - location: "http://host-wdrip-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/bin/linux/x86_64/0.1.0/meridian.linux.x86_64.tar.gz"
+  - location: "http://host-wdrip-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/bin/linux/amd64/0.1.0/meridian-guest.linux.amd64.tar.gz"
     arch: "x86_64"
     name: "0.1.0"
     os: "linux"
-  - location: "http://host-wdrip-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/bin/linux/aarch64/0.1.0/meridian.linux.aarch64.tar.gz"
+  - location: "http://host-wdrip-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/bin/linux/arm64/0.1.0/meridian-guest.linux.arm64.tar.gz"
     arch: "aarch64"
     name: "0.1.0"
     os: "linux"
