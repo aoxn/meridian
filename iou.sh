@@ -77,6 +77,8 @@ function setup::install_meridian() {
             #md5sum -c /tmp/meridian.${os}.${arch}.tar.gz.sum
             tar xf /tmp/meridian."${os}".${arch}.tar.gz -C /tmp
             sudo mv -f /tmp/bin/meridian."${os}".${arch} /usr/local/bin/meridian
+            sudo mv -f /tmp/bin/meridiand."${os}".${arch} /usr/local/bin/meridiand
+            sudo mv -f /tmp/bin/meridian-vm."${os}".${arch} /usr/local/bin/meridian-vm
             rm -rf /tmp/meridian."${os}".${arch}.tar.gz /tmp/meridian."${os}".${arch}.tar.gz.sum
     fi
 

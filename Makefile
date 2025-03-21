@@ -154,6 +154,14 @@ meridian-node: fmt vet
 	CGO_ENABLED=0 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridian-node.$(GOOS).$(GOARCH) cmd/meridian-node/node.go
 	sudo cp -rf bin/meridian-node.$(GOOS).$(GOARCH) /usr/local/bin/meridian-node
 
+.PHONY: meridian-vm
+meridian-vm: fmt vet
+	@echo Build meridian-vm binary[$(GOOS)][$(GOARCH)].
+	GOOS=$(GOOS)                \
+	GOARCH=$(GOARCH)             \
+	CGO_ENABLED=0 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridian-vm.$(GOOS).$(GOARCH) cmd/meridian-vm/start.go
+	sudo cp -rf bin/meridian-vm.$(GOOS).$(GOARCH) /usr/local/bin/meridian-vm
+
 .PHONY: meridian
 meridian: fmt vet
 	@echo Build meridian binary[$(GOOS)][$(GOARCH)].

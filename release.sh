@@ -29,6 +29,7 @@ function release::meridian() {
 	fi
 	GOOS=${os} GOARCH=${arch} make meridian
 	GOOS=${os} GOARCH=${arch} make meridiand
+	GOOS=${os} GOARCH=${arch} make meridian-vm
 	
 	target=/tmp/meridian."${os}"."${arch}".tar.gz
 	target_md5=/tmp/meridian."${os}"."${arch}".tar.gz.sum
@@ -42,7 +43,7 @@ function release::meridian() {
 	fi
 	rm -rf "$target" "$target_md5"
 	
-	tar -cvzf "$target" bin/meridian."${os}"."${arch}" bin/meridiand."${os}"."${arch}"
+	tar -cvzf "$target" bin/meridian."${os}"."${arch}" bin/meridiand."${os}"."${arch}" bin/meridian-vm."${os}"."${arch}"
 	
 	md5sum bin/meridian."${os}"."${arch}" > $target_md5
 

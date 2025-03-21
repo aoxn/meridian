@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/aoxn/meridian"
-	"github.com/aoxn/meridian/cmd/meridiand/vm"
 	"github.com/aoxn/meridian/internal/apihandler"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
@@ -29,7 +28,6 @@ func NewCommand() *cobra.Command {
 	}
 	cmd.PersistentFlags().AddGoFlagSet(NewKlogFlags())
 	cmd.AddCommand(NewCommandServe())
-	cmd.AddCommand(vm.NewCommandStart())
 	cmd.AddCommand(NewCommandVersion())
 	return cmd
 }

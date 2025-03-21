@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -458,12 +459,13 @@ func (m *virtualMachine) handleVm(ctx context.Context, vm *v1.VirtualMachine) er
 		klog.Infof("[%-10s]got existing pid [%s]", vm.Name, pid.PID)
 	}
 	if pid.PID == "" || time.Now().After(pid.Stamp.Add(30*time.Second)) {
-		self, err := os.Executable()
-		if err != nil {
-			return errors.Wrapf(err, "get self executable")
-		}
 		klog.Infof("[%-10s]pid not found or expired: [%s]", vm.Name, pid)
 		_ = os.MkdirAll(inst.Dir, 0o700)
+		vmBin, err := vmBinaryPath()
+		if err != nil {
+			return err
+		}
+		klog.Infof("boot vm from: %s", vmBin)
 		haStdoutPath := filepath.Join(inst.Dir, v1.HostAgentStdoutLog)
 		haStderrPath := filepath.Join(inst.Dir, v1.HostAgentStderrLog)
 		if err := os.RemoveAll(haStdoutPath); err != nil {
@@ -482,8 +484,8 @@ func (m *virtualMachine) handleVm(ctx context.Context, vm *v1.VirtualMachine) er
 			return err
 		}
 		// no defer haStderrW.Close()
-		var args = []string{"start", "vm"}
-		haCmd := exec.CommandContext(ctx, self, args...)
+		var args = []string{"start"}
+		haCmd := exec.CommandContext(ctx, vmBin, args...)
 
 		haCmd.Stdin = strings.NewReader(tool.PrettyYaml(vm))
 		haCmd.Stdout = haStdoutW
@@ -495,7 +497,7 @@ func (m *virtualMachine) handleVm(ctx context.Context, vm *v1.VirtualMachine) er
 		if err := haCmd.Start(); err != nil {
 			return err
 		}
-		klog.Infof("[%-10s]vm started: [%s], %s", vm.Name, pid.PID, strings.Join(append([]string{self}, args...), " "))
+		klog.Infof("[%-10s]vm started: [%s], %s", vm.Name, pid.PID, strings.Join(append([]string{vmBin}, args...), " "))
 	} else {
 		klog.Infof("[%-10s]virtual machine already started: [%s]", vm.Name, pid.PID)
 	}
@@ -518,6 +520,18 @@ func (m *virtualMachine) handleVm(ctx context.Context, vm *v1.VirtualMachine) er
 	}
 	_, err = m.Store.Update(ctx, vm, &metav1.UpdateOptions{})
 	return err
+}
+
+func vmBinaryPath() (string, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	link, err := filepath.EvalSymlinks(self)
+	if err != nil {
+		return "", err
+	}
+	return path.Join(path.Dir(link), "meridian-vm"), nil
 }
 
 func endpoint(name string) string {
