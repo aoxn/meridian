@@ -160,10 +160,6 @@ func (m *Meridian) saveRequest() error {
 }
 
 func (m *Meridian) DestroyNode() error {
-	if err := m.request.Validate(); err != nil {
-		return errors.Wrap(err, "validating init request")
-	}
-
 	local, err := NewLocal(m.cloud)
 	if err != nil {
 		return errors.Wrap(err, "new local host when")

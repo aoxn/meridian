@@ -35,6 +35,8 @@ type Containerd struct {
 type Network struct {
 	MACAddress string
 	Interface  string
+	IpAddress  string
+	IpGateway  string
 }
 type Mount struct {
 	Tag        string

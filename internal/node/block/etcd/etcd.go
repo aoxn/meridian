@@ -145,6 +145,7 @@ func (a *etcd) Purge(ctx context.Context) error {
 	for _, r := range []string{
 		EtcdHome(),
 		"/lib/systemd/system/etcd.service",
+		"/etc/systemd/system/etcd.service",
 		"/usr/local/bin/etcd",
 		"/usr/local/bin/etcdctl",
 	} {

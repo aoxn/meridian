@@ -73,6 +73,8 @@ func (i *CloudInit) GenCIISO() error {
 		network := Network{
 			Interface:  "enp0s1",
 			MACAddress: n.MACAddress,
+			IpAddress:  n.Address,
+			IpGateway:  n.IpGateway,
 		}
 		args.Networks = append(args.Networks, network)
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/aoxn/meridian/internal/node/block/post/addons"
 	"github.com/aoxn/meridian/internal/tool/cmd"
 	"github.com/aoxn/meridian/internal/tool/sign"
+	"github.com/c-robinson/iplib"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/tools/clientcmd"
 	"net"
@@ -212,6 +213,10 @@ func (m *virtualMachine) Create(ctx context.Context, object runtime.Object, opti
 	if err != nil {
 		return object, err
 	}
+	err = m.allocateAddress(ctx, vm)
+	if err != nil {
+		return object, err
+	}
 	ret, err := m.Store.Create(ctx, object, options)
 	if err != nil {
 		return nil, err
@@ -255,8 +260,16 @@ func setVmDefault(vm *v1.VirtualMachine) error {
 	return nil
 }
 
+var (
+	defaultGateway = "192.168.64.1"
+	defaultCIDR    = "192.168.64.1/24"
+)
+
 func (m *virtualMachine) allocateAddress(ctx context.Context, vm *v1.VirtualMachine) error {
-	if vm.Spec.Message != "" {
+	_, needAllocate := lo.Find(vm.Spec.Networks, func(item v1.Network) bool {
+		return item.Address == ""
+	})
+	if !needAllocate {
 		return nil
 	}
 	var vms = v1.VirtualMachineList{}
@@ -264,11 +277,48 @@ func (m *virtualMachine) allocateAddress(ctx context.Context, vm *v1.VirtualMach
 	if err != nil {
 		return err
 	}
-	var allocated []string
-	lo.Map(vms.Items, func(item v1.VirtualMachine, index int) string {
-		return item.Spec.Message
+
+	networks := lo.FlatMap(vms.Items, func(item v1.VirtualMachine, index int) []v1.Network {
+		if item.Name == vm.Name {
+			return nil
+		}
+		return item.Spec.Networks
 	})
-	klog.Infof("allocated address: %s", allocated)
+
+	var allocated map[string]string
+	allocated = lo.FilterSliceToMap(networks, func(item v1.Network) (string, string, bool) {
+		if item.Address == "" {
+			return "", "", false
+		}
+		return item.Address, item.Address, true
+	})
+
+	klog.Infof("address has been allocated: %s", allocated)
+	ip, _, err := net.ParseCIDR(defaultCIDR)
+	if err != nil {
+		return errors.Wrapf(err, "error parsing default cidr %s", defaultCIDR)
+	}
+	n := iplib.NewNet4(ip, 24)
+	for index, _ := range vm.Spec.Networks {
+		succeed := false
+		for i := 0; i < 255; i++ {
+			n = n.NextNet(24)
+			if n.String() == defaultCIDR {
+				continue
+			}
+			_, ok := allocated[n.String()]
+			if ok {
+				continue
+			}
+			succeed = true
+			vm.Spec.Networks[index].IpGateway = defaultGateway
+			vm.Spec.Networks[index].Address = fmt.Sprintf("%s/24", n.String())
+			break
+		}
+		if !succeed {
+			return fmt.Errorf("no available ip address")
+		}
+	}
 	return nil
 }
 

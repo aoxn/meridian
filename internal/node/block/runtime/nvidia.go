@@ -63,6 +63,9 @@ func (a *nvidiaBlock) Purge(ctx context.Context) error {
 	case host.Ubuntu:
 		var pkg []*apt.Package
 		for _, i := range []string{
+			"libnvidia-container1",
+			"libnvidia-container-tools",
+			"nvidia-container-toolkit-base",
 			"nvidia-container-toolkit",
 		} {
 			found, err := apt.Search(i)

@@ -56,12 +56,12 @@ func NewJoinRequest(req *v1.Request) *v1.Request {
 func NewCommandDestroy() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "destroy",
-		Short: "meridian destroy",
-		Long:  "meridian destroy",
+		Short: "meridian destroy /etc/meridian/request.yaml",
+		Long:  "meridian destroy /etc/meridian/request.yaml",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf(meridian.Logo)
 			if len(args) < 1 {
-				return fmt.Errorf("resource is needed. [req]|[request]")
+				return fmt.Errorf("resource file is needed. eg. [/etc/meridian/request.yaml]")
 			}
 
 			data, err := os.ReadFile(args[0])

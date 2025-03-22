@@ -140,6 +140,8 @@ type Network struct {
 
 	MACAddress string `yaml:"macAddress,omitempty" json:"macAddress,omitempty"`
 	Interface  string `yaml:"interface,omitempty" json:"interface,omitempty"`
+	Address    string `yaml:"address,omitempty" json:"address,omitempty"`
+	IpGateway  string `yaml:"ipGateway,omitempty" json:"ipGateway,omitempty"`
 }
 
 type HostResolver struct {

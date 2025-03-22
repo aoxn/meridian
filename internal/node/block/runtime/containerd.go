@@ -81,6 +81,8 @@ func (a *containerdBlock) Ensure(ctx context.Context) error {
 		return fmt.Errorf("write docker config: %s", err.Error())
 	}
 
+	_ = a.host.Service().Disable("containerd")
+	_ = a.host.Service().Disable("docker")
 	err = a.host.Service().Enable("docker")
 	if err != nil {
 		return fmt.Errorf("systecmctl enable docker error,%s ", err.Error())
@@ -143,6 +145,7 @@ func (a *containerdBlock) Purge(ctx context.Context) error {
 		"/etc/containerd/config.toml",
 		containerdServiceFile,
 		"/etc/containerd/",
+		"/etc/systemd/system/containerd.service",
 	}
 	files = append(files, keys(cfgs)...)
 
