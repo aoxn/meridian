@@ -21,15 +21,6 @@ import (
 )
 
 func Start(args []string, cfgfile string) error {
-	if len(args) <= 0 {
-		return fmt.Errorf("resource type is required")
-	}
-	resource := args[0]
-	switch resource {
-	case "vm":
-	default:
-		return fmt.Errorf("unsupported resource type: %s", resource)
-	}
 	var (
 		data []byte
 		err  error

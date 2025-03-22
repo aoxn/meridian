@@ -29,7 +29,7 @@ const (
 	CIDataISODir         = "cidata"
 	BaseDisk             = "basedisk"
 	DiffDisk             = "diffdisk"
-	GuestBin             = "meridian"
+	GuestBin             = "meridian-guest"
 	KernelCmdline        = "kernel.cmdline"
 	Initrd               = "initrd"
 	QMPSock              = "qmp.sock"

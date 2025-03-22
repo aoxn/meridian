@@ -1,5 +1,3 @@
-# SPDX-FileCopyrightText: Copyright The Lima Authors
-# SPDX-License-Identifier: Apache-2.0
 version: 2
 ethernets:
   {{- range $nw := .Networks}}
@@ -8,9 +6,9 @@ ethernets:
       macaddress: '{{$nw.MACAddress}}'
     dhcp4: true
     set-name: {{$nw.Interface}}
-#    addresses:
-#      - 192.168.64.2/24
-#    gateway4: 192.168.64.1
+    addresses:
+      - 192.168.64.2/24
+    gateway4: 192.168.64.1
   {{- end }}
 
 

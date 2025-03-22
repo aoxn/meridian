@@ -15,9 +15,7 @@ import (
 	"sync"
 	"time"
 	"unsafe"
-	"k8s.io/klog/v2"
-	
-	"golang.org/x/sys/unix"
+
 	"github.com/Code-Hex/vz/v3/internal/objc"
 )
 
@@ -270,11 +268,6 @@ var _ net.Conn = (*VirtioSocketConnection)(nil)
 func newVirtioSocketConnection(ptr unsafe.Pointer) (*VirtioSocketConnection, error) {
 	vzVirtioSocketConnection := C.convertVZVirtioSocketConnection2Flat(ptr)
 	file := os.NewFile((uintptr)(vzVirtioSocketConnection.fileDescriptor), "")
-	err := unix.SetNonblock((int)(file.Fd()), true)
-	if err != nil {
-		klog.Warningf("set nonblock failed: %s", err.Error())
-	}
-	klog.V(5).Infof("set nonblock")
 	defer file.Close()
 	rawConn, err := net.FileConn(file)
 	if err != nil {

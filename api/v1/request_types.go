@@ -110,6 +110,9 @@ func (req *Request) Validate() error {
 	if req.Spec.Config.Runtime.Version == "" {
 		req.Spec.Config.Runtime.Version = "1.6.28"
 	}
+	if req.Spec.Config.Runtime.NvidiaToolKitVersion == "" {
+		req.Spec.Config.Runtime.NvidiaToolKitVersion = "1.17.5"
+	}
 	if req.Spec.Config.Runtime.RuntimeType == "" {
 		req.Spec.Config.Runtime.RuntimeType = "containerd"
 	}

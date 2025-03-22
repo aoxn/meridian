@@ -224,9 +224,10 @@ type ConfigTpl struct {
 }
 
 type Runtime struct {
-	Name        string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
-	RuntimeType string `json:"runtimeType,omitempty" protobuf:"bytes,1,opt,name=runtimeType"`
-	Version     string `json:"version,omitempty" protobuf:"bytes,2,opt,name=version"`
+	Name                 string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
+	RuntimeType          string `json:"runtimeType,omitempty" protobuf:"bytes,1,opt,name=runtimeType"`
+	Version              string `json:"version,omitempty" protobuf:"bytes,2,opt,name=version"`
+	NvidiaToolKitVersion string `json:"nvidiaToolKitVersion,omitempty" protobuf:"bytes,3,opt,name=nvidiaToolKitVersion"`
 }
 
 type Progress struct {

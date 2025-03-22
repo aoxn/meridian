@@ -81,6 +81,10 @@ func NewRequest() (*v1.Request, error) {
 						Version: "1.31.1-aliyun.1",
 					},
 				},
+				Runtime: v1.Runtime{
+					Version:              "1.6.28",
+					NvidiaToolKitVersion: "1.17.5",
+				},
 				Namespace: "default",
 				CloudType: "public",
 				Network: v1.NetworkCfg{

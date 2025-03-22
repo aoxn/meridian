@@ -20,7 +20,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      name: `nvidia-device-plugin-ds`
+      name: nvidia-device-plugin-ds
   updateStrategy:
     type: RollingUpdate
   template:

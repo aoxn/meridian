@@ -237,7 +237,7 @@ func attachSerialPort(driver *backend.BaseDriver, config *vz.VirtualMachineConfi
 	if err != nil {
 		return err
 	}
-	//setRawMode(os.Stdin)
+	setRawMode(os.Stdin)
 	//serialPortAttachment, err := vz.NewFileHandleSerialPortAttachment(os.Stdin, os.Stdout)
 	//if err != nil {
 	//	return err
@@ -247,6 +247,37 @@ func attachSerialPort(driver *backend.BaseDriver, config *vz.VirtualMachineConfi
 		consoleConfig,
 	})
 	return err
+}
+
+func createSpiceAgentConsoleDeviceConfiguration(driver *backend.BaseDriver, config *vz.VirtualMachineConfiguration) error {
+	consoleDevice, err := vz.NewVirtioConsoleDeviceConfiguration()
+	if err != nil {
+		return fmt.Errorf("failed to create a new console device: %w", err)
+	}
+
+	spiceAgentAttachment, err := vz.NewSpiceAgentPortAttachment()
+	if err != nil {
+		return fmt.Errorf("failed to create a new spice agent attachment: %w", err)
+	}
+	spiceAgentName, err := vz.SpiceAgentPortAttachmentName()
+	if err != nil {
+		return fmt.Errorf("failed to get spice agent name: %w", err)
+	}
+	spiceAgentPort, err := vz.NewVirtioConsolePortConfiguration(
+		vz.WithVirtioConsolePortConfigurationAttachment(spiceAgentAttachment),
+		vz.WithVirtioConsolePortConfigurationName(spiceAgentName),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create a new console port for spice agent: %w", err)
+	}
+
+	consoleDevice.SetVirtioConsolePortConfiguration(0, spiceAgentPort)
+
+	config.SetConsoleDevicesVirtualMachineConfiguration([]vz.ConsoleDeviceConfiguration{
+		consoleDevice,
+	})
+
+	return nil
 }
 
 func newVirtioFileNetworkDeviceConfiguration(file *os.File, macStr string) (*vz.VirtioNetworkDeviceConfiguration, error) {

@@ -133,4 +133,4 @@ function release_one_pkg() {
 #loopTarPkg "arm64"
 #loopReleasePkg "arm64"
 
-release_one_pkg "nvidia-toolkit" "1.17.5" "rpm" "amd64"
+release_one_pkg "nvidia-toolkit" "1.17.5" "deb" "amd64"

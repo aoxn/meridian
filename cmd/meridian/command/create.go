@@ -19,7 +19,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"strings"
 )
 
 func create(r string, args []string, cmdline *cmdflag) error {
@@ -44,20 +43,18 @@ func create(r string, args []string, cmdline *cmdflag) error {
 			virt                 = &v1.VirtualMachine{}
 		)
 		if cmdline.config == "" {
-			virt, err = ReadHistory(args[0])
-			if err != nil {
-				if !strings.Contains(err.Error(), "no such file or directory") {
-					return err
+			if cmdline.recoverMode {
+				virt, err = ReadHistory(args[0])
+				if err != nil {
+					return errors.Wrap(err, "read recover history")
 				}
-				klog.Infof("read history vm: %s", err.Error())
+			} else {
+				klog.Infof("use default config")
 				// use default config
 				virt, err = v1.LoadDft()
 				if err != nil {
 					return errors.Wrapf(err, "load default vm config")
 				}
-			} else {
-				loadFromHistory = true
-				klog.Infof("use default set from history vm[%s]", args[0])
 			}
 		} else {
 			data, err := os.ReadFile(cmdline.config)

@@ -27,6 +27,7 @@ import (
 	"github.com/aoxn/meridian/internal/server/service/universal"
 	"github.com/aoxn/meridian/internal/tool"
 	"github.com/aoxn/meridian/internal/vma/model"
+	"github.com/samber/lo"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -207,11 +208,22 @@ func (m *virtualMachine) Create(ctx context.Context, object runtime.Object, opti
 		klog.V(5).Infof("mac address is: %s for %s", network.MACAddress, network.Interface)
 	}
 
-	addons.SetDftClusterAddons(&vm.Spec.Request)
+	err = setVmDefault(vm)
+	if err != nil {
+		return object, err
+	}
+	ret, err := m.Store.Create(ctx, object, options)
+	if err != nil {
+		return nil, err
+	}
+	return ret, m.SendTask(vm)
+}
+
+func setVmDefault(vm *v1.VirtualMachine) error {
 
 	home, err := model.MdHOME()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	vm.Spec.SetPortForward(v1.PortForward{
 		Proto:     "unix",
@@ -226,7 +238,7 @@ func (m *virtualMachine) Create(ctx context.Context, object runtime.Object, opti
 	})
 	port, err := strconv.Atoi(vm.Spec.Request.AccessPoint.APIPort)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	vm.Spec.SetPortForward(v1.PortForward{
 		Proto:       "tcp",
@@ -239,11 +251,25 @@ func (m *virtualMachine) Create(ctx context.Context, object runtime.Object, opti
 		Location:   fmt.Sprintf("~/mdata/%s", vm.Name),
 		MountPoint: "/mnt/disk0",
 	})
-	ret, err := m.Store.Create(ctx, object, options)
-	if err != nil {
-		return nil, err
+	addons.SetDftClusterAddons(&vm.Spec.Request)
+	return nil
+}
+
+func (m *virtualMachine) allocateAddress(ctx context.Context, vm *v1.VirtualMachine) error {
+	if vm.Spec.Message != "" {
+		return nil
 	}
-	return ret, m.SendTask(vm)
+	var vms = v1.VirtualMachineList{}
+	_, err := m.List(ctx, &vms, &metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	var allocated []string
+	lo.Map(vms.Items, func(item v1.VirtualMachine, index int) string {
+		return item.Spec.Message
+	})
+	klog.Infof("allocated address: %s", allocated)
+	return nil
 }
 
 func (m *virtualMachine) Delete(ctx context.Context, object runtime.Object, options *metav1.DeleteOptions) (runtime.Object, error) {

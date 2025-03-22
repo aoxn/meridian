@@ -177,7 +177,15 @@ func (m *Meridian) DestroyNode() error {
 	if err != nil {
 		return errors.Wrap(err, "new etcd block while")
 	}
-	runtimeBlock, err := runtime.NewNvidiaBlock(m.request, local)
+	runtimeBlock, err := runtime.NewContainerdBlock(m.request, local)
+	if err != nil {
+		return errors.Wrap(err, "new runtime block while")
+	}
+
+	nvidiaBlock, err := runtime.NewNvidiaBlock(m.request, local)
+	if err != nil {
+		return errors.Wrap(err, "new runtime block while")
+	}
 	kubeletBlock, err := kubeadm.NewKubeletBlock(m.request, local, m.role, m.nodeGroup)
 	if err != nil {
 		return errors.Wrap(err, "new kubelet block while")
@@ -189,7 +197,7 @@ func (m *Meridian) DestroyNode() error {
 	}
 
 	blocks := []block.Block{
-		kubeAuthBlock, kubeletBlock, runtimeBlock, etcdBlock,
+		kubeAuthBlock, kubeletBlock, nvidiaBlock, runtimeBlock, etcdBlock,
 	}
 	ctx := context.TODO()
 	for _, b := range blocks {
@@ -206,7 +214,7 @@ func (m *Meridian) buildActionBlocks(local host.Host) ([]block.Block, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "new etcd block while")
 	}
-	runtimeBlock, err := runtime.NewNvidiaBlock(m.request, local)
+	runtimeBlock, err := runtime.NewContainerdBlock(m.request, local)
 	if err != nil {
 		return nil, errors.Wrap(err, "new containerd block while")
 	}
@@ -250,21 +258,20 @@ func (m *Meridian) buildActionBlocks(local host.Host) ([]block.Block, error) {
 			etcdBlock,
 			runtimeBlock,
 			kubeletBlock,
-			nvidiaBlock,
 		}
 
 		addon := []block.Block{
 			ccmBlock,
 			postAddon,
 		}
-		blocks = append(blocks, block.NewConcurrentBlock(base), initBlock, kubeAuthBlock, block.NewConcurrentBlock(addon))
+		blocks = append(blocks, block.NewConcurrentBlock(base), nvidiaBlock, initBlock, kubeAuthBlock, block.NewConcurrentBlock(addon))
 	case v1.NodeRoleWorker:
 		base := []block.Block{
 			runtimeBlock,
 			kubeletBlock,
 		}
 
-		blocks = append(blocks, block.NewConcurrentBlock(base), kubejoinBlock)
+		blocks = append(blocks, block.NewConcurrentBlock(base), nvidiaBlock, kubejoinBlock)
 	}
 	klog.Infof("building blocks generated for [%s] initialize", m.role)
 	return blocks, nil

@@ -1,6 +1,3 @@
-# SPDX-FileCopyrightText: Copyright The Lima Authors
-# SPDX-License-Identifier: Apache-2.0
-
 #cloud-config
 # vim:syntax=yaml
 
@@ -18,8 +15,8 @@ users:
     homedir: "{{.Home}}"
     shell: /bin/bash
     sudo: ALL=(ALL) NOPASSWD:ALL
-    lock_passwd: false
-    plain_text_passwd: 123456
+    lock_passwd: true
+#    plain_text_passwd: 123456
     ssh_authorized_keys:
     {{- range $val := .SSHPubKeys }}
       - {{ printf "%q" $val }}

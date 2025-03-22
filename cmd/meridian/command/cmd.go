@@ -36,11 +36,12 @@ func NewCommandVersion() *cobra.Command {
 }
 
 type cmdflag struct {
-	config string
-	cpus   int
-	mems   string
-	image  string
-	arch   string
+	config      string
+	cpus        int
+	mems        string
+	image       string
+	arch        string
+	recoverMode bool
 
 	withNodeGroups bool
 	withKubernetes bool

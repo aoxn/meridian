@@ -49,38 +49,17 @@ function setup::uninstall() {
 
 function setup::install_meridian() {
 
-    need_install=0
-    if [[ -f /usr/local/bin/meridian ]];
-    then
-            wget -q -O /tmp/meridian."${os}".${arch}.tar.gz.sum \
-                    $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz.sum
-            # shellcheck disable=SC2002
-            m1=$(cat /tmp/meridian."${os}".${arch}.tar.gz.sum |awk '{print $1}')
-            m2=$(md5sum /usr/local/bin/meridian |awk '{print $1}')
-            if [[ "$m1" == "$m2" ]];
-            then
-                    need_install=0
-            else
-                    need_install=1
-            fi
-    else
-            need_install=1
-    fi
+    wget -q -O /tmp/meridian."${os}".${arch}.tar.gz \
+            $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz
 
-    if [[ "$need_install" == "1" ]];
-    then
-            wget -q -O /tmp/meridian."${os}".${arch}.tar.gz \
-                    $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz
-
-            wget -q -O /tmp/meridian."${os}".${arch}.tar.gz.sum \
-                    $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz.sum
-            #md5sum -c /tmp/meridian.${os}.${arch}.tar.gz.sum
-            tar xf /tmp/meridian."${os}".${arch}.tar.gz -C /tmp
-            sudo mv -f /tmp/bin/meridian."${os}".${arch} /usr/local/bin/meridian
-            sudo mv -f /tmp/bin/meridiand."${os}".${arch} /usr/local/bin/meridiand
-            sudo mv -f /tmp/bin/meridian-vm."${os}".${arch} /usr/local/bin/meridian-vm
-            rm -rf /tmp/meridian."${os}".${arch}.tar.gz /tmp/meridian."${os}".${arch}.tar.gz.sum
-    fi
+    wget -q -O /tmp/meridian."${os}".${arch}.tar.gz.sum \
+            $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz.sum
+    #md5sum -c /tmp/meridian.${os}.${arch}.tar.gz.sum
+    tar xf /tmp/meridian."${os}".${arch}.tar.gz -C /tmp
+    sudo mv -f /tmp/bin/meridian."${os}".${arch} /usr/local/bin/meridian
+    sudo mv -f /tmp/bin/meridiand."${os}".${arch} /usr/local/bin/meridiand
+    sudo mv -f /tmp/bin/meridian-vm."${os}".${arch} /usr/local/bin/meridian-vm
+    rm -rf /tmp/meridian."${os}".${arch}.tar.gz /tmp/meridian."${os}".${arch}.tar.gz.sum
 
     sudo rm -rf /tmp/meridian.sock || true
 

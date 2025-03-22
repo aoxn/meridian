@@ -36,9 +36,9 @@ func NewNvidiaBlock(req *v1.Request, host host.Host) (block.Block, error) {
 		host: host,
 		file: &file.File{
 			Path:    info,
-			Pkg:     file.PKG_CONTAINERD,
+			Pkg:     file.PKG_NVIDIA_TOOLKIT,
 			Ftype:   file.FILE_PKG,
-			Version: req.Spec.Config.Runtime.Version,
+			Version: req.Spec.Config.Runtime.NvidiaToolKitVersion,
 		},
 	}, nil
 }
