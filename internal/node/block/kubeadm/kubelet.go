@@ -13,6 +13,7 @@ import (
 	"github.com/aoxn/meridian/internal/node/host"
 	"github.com/aoxn/meridian/internal/tool"
 	"github.com/aoxn/meridian/internal/tool/cmd"
+	"github.com/aoxn/meridian/internal/tool/nvidia"
 	"github.com/aoxn/meridian/internal/tool/sign"
 	"github.com/pkg/errors"
 	"io/ioutil"
@@ -303,14 +304,12 @@ func (a *kubeletInit) KubeletUnitFile(node *v1.Request, ip string) string {
 	}
 
 	var labels []string
-	if a.nodeGroup != "" {
-		labels = append(labels, fmt.Sprintf("%s=%s", v1.MERIDIAN_NODEGROUP, a.nodeGroup))
-		labels = append(labels, fmt.Sprintf("raven.openyurt.io/gateway=gw-%s", a.nodeGroup))
+	exist, err := nvidia.HasNvidiaDevice()
+	if err != nil {
+		klog.Infof("failed to check nvidia device: %v", err)
 	}
-	switch a.role {
-	case v1.NodeRoleMaster:
-		labels = append(labels, "raven.openyurt.io/gateway=gw-master")
-	case v1.NodeRoleWorker:
+	if exist {
+		labels = append(labels, fmt.Sprintf("%s=%s", nvidia.LabelNvidiaDevice, "gpu"))
 	}
 	if len(labels) > 0 {
 		paraMap["KUBELET_LABELS"] = fmt.Sprintf("--node-labels=%s", strings.Join(labels, ","))

@@ -172,7 +172,7 @@ Requires=docker.socket
 Type=notify
 ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock
 ExecStartPost=/usr/sbin/iptables -P FORWARD ACCEPT
-ExecReload=/bin/kill -s HUP \$MAINPID
+ExecReload=/bin/kill -s HUP $MAINPID
 TimeoutSec=0
 RestartSec=2
 Restart=always

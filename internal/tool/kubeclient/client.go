@@ -23,69 +23,75 @@ func Guest(vm *api.VirtualMachine) *KubeClient {
 	return &KubeClient{vm: vm, side: "guest"}
 }
 
+func Host(req *api.Request) *KubeClient {
+	return &KubeClient{request: req, side: "host"}
+}
+
 type KubeClient struct {
-	side   string
-	auth   *clientcmdapi.Config
-	client kubernetes.Interface
-	vm     *api.VirtualMachine
+	side    string
+	request *api.Request
+	auth    *clientcmdapi.Config
+	client  kubernetes.Interface
+	vm      *api.VirtualMachine
 }
 
 func (kc *KubeClient) initClient() error {
 	if kc.client != nil {
 		return nil
 	}
+	var (
+		address = "127.0.0.1"
+		request = kc.request
+	)
 	switch kc.side {
 	case "guest":
-		cfg := kc.vm.Spec.Request.Config
 		if len(kc.vm.Status.Address) <= 0 {
 			return fmt.Errorf("unknown api server address for vm: %s", kc.vm.Name)
 		}
-		var addr string
 		for _, v := range kc.vm.Status.Address {
 			if strings.HasPrefix(v, "192.168") {
-				addr = v
+				address = v
 				break
 			}
 		}
-		if addr == "" {
-			return fmt.Errorf("unknown api server address for vm: %s", kc.vm.Name)
-		}
-		root := cfg.TLS["root"]
-		key, crt, err := sign.SignKubernetesClient(root.Cert, root.Key, []string{})
-		if err != nil {
-			return fmt.Errorf("sign kubernetes client crt: %s", err.Error())
-		}
-		cfgData, err := tool.RenderConfig(
-			"admin.authconfig",
-			tool.KubeConfigTpl,
-			tool.RenderParam{
-				AuthCA:      base64.StdEncoding.EncodeToString(root.Cert),
-				Address:     addr,
-				Port:        "6443",
-				ClusterName: "kubernetes.cluster",
-				UserName:    "kubernetes.user",
-				ClientCRT:   base64.StdEncoding.EncodeToString(crt),
-				ClientKey:   base64.StdEncoding.EncodeToString(key),
-			},
-		)
-		if err != nil {
-			return fmt.Errorf("render vm kubeconfig error: %s", err.Error())
-		}
-		klog.V(5).Infof("debug: with kubeconfig: %s", cfgData)
-		config, err := clientcmd.Load([]byte(cfgData))
-		if err != nil {
-			return fmt.Errorf("load kubeconfig error: %s", err.Error())
-		}
-		kc.auth = config
-		client, err := ToClientSet(config)
-		if err != nil {
-			return err
-		}
-		kc.client = client
-		return nil
+	case "host":
+		klog.Infof("build local kubernetes client config")
 	default:
 		return fmt.Errorf("unimplenmented host kubeclient: %s", kc.vm.Name)
 	}
+	root := request.Spec.Config.TLS["root"]
+	key, crt, err := sign.SignKubernetesClient(root.Cert, root.Key, []string{})
+	if err != nil {
+		return fmt.Errorf("sign kubernetes client crt: %s", err.Error())
+	}
+	cfgData, err := tool.RenderConfig(
+		"admin.authconfig",
+		tool.KubeConfigTpl,
+		tool.RenderParam{
+			AuthCA:      base64.StdEncoding.EncodeToString(root.Cert),
+			Address:     address,
+			Port:        "6443",
+			ClusterName: "kubernetes.cluster",
+			UserName:    "kubernetes.user",
+			ClientCRT:   base64.StdEncoding.EncodeToString(crt),
+			ClientKey:   base64.StdEncoding.EncodeToString(key),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("render vm kubeconfig error: %s", err.Error())
+	}
+	klog.V(5).Infof("debug: with kubeconfig: %s", cfgData)
+	config, err := clientcmd.Load([]byte(cfgData))
+	if err != nil {
+		return fmt.Errorf("load kubeconfig error: %s", err.Error())
+	}
+	kc.auth = config
+	client, err := ToClientSet(config)
+	if err != nil {
+		return err
+	}
+	kc.client = client
+	return nil
 }
 
 func (kc *KubeClient) Apply(yml string) error {

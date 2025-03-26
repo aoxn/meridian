@@ -7,6 +7,7 @@ import (
 	"github.com/aoxn/meridian/internal/node/block"
 	"github.com/aoxn/meridian/internal/node/block/file"
 	"github.com/aoxn/meridian/internal/node/host"
+	"github.com/aoxn/meridian/internal/tool/nvidia"
 	apt "github.com/arduino/go-apt-client"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
@@ -45,7 +46,10 @@ func NewNvidiaBlock(req *v1.Request, host host.Host) (block.Block, error) {
 
 // Ensure runs the action
 func (a *nvidiaBlock) Ensure(ctx context.Context) error {
-
+	if has, err := nvidia.HasNvidiaDevice(); err != nil || !has {
+		klog.Infof("find nvidia with error: %v", err)
+		return nil
+	}
 	if err := a.file.Ensure(ctx); err != nil {
 		return errors.Wrapf(err, "install containerd runtime: %s", a.req.Name)
 	}

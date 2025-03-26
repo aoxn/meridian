@@ -248,7 +248,7 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 	rm Dockerfile.cross
 
 # builds meridian in a container, outputs to $(OUT_DIR)
-container: make-cache out-dir
+meridian-node-container: make-cache out-dir
 	@echo + Building binary:$(OUT_DIR)/$(KIND_BINARY_NAME)
 	sudo docker run \
 		--rm \
@@ -265,10 +265,11 @@ container: make-cache out-dir
 		-e HTTP_PROXY=$(HTTP_PROXY) \
 		-e HTTPS_PROXY=$(HTTPS_PROXY) \
 		-e NO_PROXY=$(NO_PROXY) \
-		--user $(UID):$(GID) \
 		$(GO_IMAGE) \
-		go build -v -o /out/$(KIND_BINARY_NAME) \
-		    -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" cmd/main.go
+		go build -v -o /out/meridian-node.$(GOOS).$(GOARCH) \
+		    -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" $(CONTAINER_REPO_DIR)/cmd/meridian-node/node.go
+	sudo cp -rf bin/meridian-node.$(GOOS).$(GOARCH) /usr/local/bin/meridian-node
+
 
 
 ##@ Deployment

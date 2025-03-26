@@ -302,8 +302,12 @@ func (m *virtualMachine) allocateAddress(ctx context.Context, vm *v1.VirtualMach
 	for index, _ := range vm.Spec.Networks {
 		succeed := false
 		for i := 0; i < 255; i++ {
-			n = n.NextNet(24)
-			if n.String() == defaultCIDR {
+			ip, err = n.NextIP(ip)
+			if err != nil {
+				return err
+			}
+			klog.V(6).Infof("search for vm ip: %s", ip)
+			if ip.String() == "192.168.64.1" || ip.String() == "192.168.64.0" {
 				continue
 			}
 			_, ok := allocated[n.String()]
@@ -312,7 +316,7 @@ func (m *virtualMachine) allocateAddress(ctx context.Context, vm *v1.VirtualMach
 			}
 			succeed = true
 			vm.Spec.Networks[index].IpGateway = defaultGateway
-			vm.Spec.Networks[index].Address = fmt.Sprintf("%s/24", n.String())
+			vm.Spec.Networks[index].Address = fmt.Sprintf("%s/24", ip.String())
 			break
 		}
 		if !succeed {

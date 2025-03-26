@@ -7,7 +7,7 @@ ethernets:
     dhcp4: true
     set-name: {{$nw.Interface}}
     addresses:
-      - {{$nw.Address}}
+      - {{$nw.IpAddress}}
     gateway4: {{$nw.IpGateway}}
   {{- end }}
 

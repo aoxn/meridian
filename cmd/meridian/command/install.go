@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/aoxn/meridian"
 	api "github.com/aoxn/meridian/api/v1"
@@ -11,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
+	"os"
 	"strings"
 )
 
@@ -18,6 +20,7 @@ var (
 	discoverAll  bool
 	discover     bool
 	forVm        string
+	local        bool
 	forNodeGroup string
 )
 
@@ -39,6 +42,7 @@ func NewCommandInstall() *cobra.Command {
 			return fmt.Errorf("unknown install command for resource: %s", args[0])
 		},
 	}
+	cmd.PersistentFlags().BoolVarP(&local, "local", "l", false, "install locally")
 	cmd.PersistentFlags().BoolVarP(&discoverAll, "all", "a", false, "discover all available addons")
 	cmd.PersistentFlags().BoolVarP(&discover, "discover", "d", false, "discover available custom addons")
 	cmd.PersistentFlags().StringVarP(&forVm, "for-vm", "n", "", "for vm name ")
@@ -85,7 +89,26 @@ func installAddon(r string, args []string) error {
 		klog.V(5).Infof("install addon from system default: %s/%s", addon.Name, addon.Version)
 	}
 	if forVm == "" {
-		return fmt.Errorf("for-vm is needed")
+		if !local {
+			return fmt.Errorf("for-vm is needed")
+		}
+		data, err := os.ReadFile("/etc/meridian/request.cfg")
+		if err != nil {
+			return err
+		}
+		req := api.Request{}
+		err = json.Unmarshal(data, &req)
+		if err != nil {
+			return err
+		}
+		yml, err := addons.RenderAddon(addonName, &addons.RenderData{
+			R: &req, NodeGroup: forNodeGroup,
+		})
+		if err != nil {
+			return errors.Wrapf(err, "render addon failed")
+		}
+
+		return kubeclient.Host(&req).Apply(yml)
 	}
 	client, err := user.Client(ListenSock)
 	if err != nil {
