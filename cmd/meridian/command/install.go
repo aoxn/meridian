@@ -2,18 +2,19 @@ package command
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/aoxn/meridian"
 	api "github.com/aoxn/meridian/api/v1"
 	user "github.com/aoxn/meridian/internal/client"
 	"github.com/aoxn/meridian/internal/node/block/post/addons"
 	"github.com/aoxn/meridian/internal/tool/kubeclient"
+	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
-	"os"
-	"strings"
 )
 
 var (
@@ -97,7 +98,7 @@ func installAddon(r string, args []string) error {
 			return err
 		}
 		req := api.Request{}
-		err = json.Unmarshal(data, &req)
+		err = yaml.Unmarshal(data, &req)
 		if err != nil {
 			return err
 		}
