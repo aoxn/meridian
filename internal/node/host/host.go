@@ -77,6 +77,7 @@ func getRelease() (string, error) {
 
 type Host interface {
 	ProviderID() string
+	NodeName() string
 	NodeID() string
 	NodeIP() string
 	OS() string
@@ -137,6 +138,13 @@ func (i *Local) NodeID() string {
 func (i *Local) ProviderID() string {
 	if i.region != "" && i.id != "" {
 		return i.region + "." + i.id
+	}
+	return strings.ToLower(i.id)
+}
+
+func (i *Local) NodeName() string {
+	if i.region != "" {
+		return i.region + "." + i.NodeIP()
 	}
 	return strings.ToLower(i.id)
 }

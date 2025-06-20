@@ -173,13 +173,7 @@ func (m *accessPoint) Reconcile() error {
 		return errors.Wrapf(err, "failed to list node groups")
 	}
 	for _, ng := range nodeGroups.Items {
-		var prvd v1.Provider
-		err = m.client.Get(ctx, client.ObjectKey{Name: ng.Spec.Provider}, &prvd)
-		if err != nil {
-			errList = append(errList, err)
-			continue
-		}
-		pd, err := cloud.NewCloud(prvd)
+		pd, err := cloud.NewCloud(m.client, ng.Spec.Provider)
 		if err != nil {
 			errList = append(errList, err)
 			continue

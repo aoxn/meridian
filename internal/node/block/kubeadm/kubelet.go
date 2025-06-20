@@ -33,10 +33,11 @@ type kubeletInit struct {
 	req       *v1.Request
 	host      host.Host
 	role      v1.NodeRole
+	labels    []string
 	nodeGroup string
 }
 
-func NewKubeletBlock(req *v1.Request, host host.Host, role v1.NodeRole, ng string) (block.Block, error) {
+func NewKubeletBlock(req *v1.Request, host host.Host, role v1.NodeRole, ng string, labels []string) (block.Block, error) {
 	info := file.PathInfo{
 		InnerAddr: false,
 		Arch:      host.Arch(),
@@ -48,6 +49,7 @@ func NewKubeletBlock(req *v1.Request, host host.Host, role v1.NodeRole, ng strin
 		return nil, err
 	}
 	return &kubeletInit{
+		labels:    labels,
 		role:      role,
 		req:       req,
 		host:      host,
@@ -311,10 +313,16 @@ func (a *kubeletInit) KubeletUnitFile(node *v1.Request, ip string) string {
 	if exist {
 		labels = append(labels, fmt.Sprintf("%s=%s", nvidia.LabelNvidiaDevice, "gpu"))
 	}
+	if a.nodeGroup != "" {
+		labels = append(labels, fmt.Sprintf("%s=%s", v1.MERIDIAN_NODEGROUP, a.nodeGroup))
+	}
+
+	if len(a.labels) > 0 {
+		labels = append(labels, a.labels...)
+	}
 	if len(labels) > 0 {
 		paraMap["KUBELET_LABELS"] = fmt.Sprintf("--node-labels=%s", strings.Join(labels, ","))
 	}
-
 	for k, v := range paraMap {
 		keys = append(keys, fmt.Sprintf("$%s", k))
 		mid = append(mid, fmt.Sprintf("Environment=\"%s=%s\"", k, v))

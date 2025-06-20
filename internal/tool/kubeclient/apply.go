@@ -70,6 +70,66 @@ func ApplyWithKubeconfig(yml, kubeconfig string) error {
 	return doApply(bytes.NewBufferString(yml), BuildClientGetter(kubeconfig))
 }
 
+func DeleteInCluster(yml string) error {
+	return doDelete(bytes.NewBufferString(yml), NewClientGetterInCluster())
+}
+
+func doDelete(
+	reader io.Reader,
+	getter genericclioptions.RESTClientGetter,
+) error {
+	f := cmdutil.NewFactory(getter)
+	schema, err := f.Validator(metav1.FieldValidationWarn)
+	if err != nil {
+		return err
+	}
+
+	cmdNamespace, _, err := f.ToRawKubeConfigLoader().Namespace()
+	if err != nil {
+		return err
+	}
+
+	r := f.NewBuilder().
+		Unstructured().
+		Stream(reader, "Delete").
+		Schema(schema).
+		ContinueOnError().
+		NamespaceParam(cmdNamespace).DefaultNamespace().
+		//FilenameParam(enforceNamespace, &options.FilenameOptions).
+		LabelSelectorParam("").
+		Flatten().
+		Do()
+	err = r.Err()
+	if err != nil {
+		return fmt.Errorf("object builder: %s", err.Error())
+	}
+
+	return r.Visit(
+		func(info *resource.Info, err error) error {
+			if err != nil {
+				return fmt.Errorf("visit object: %s, info=%v", err.Error(), info)
+			}
+			dClient, err := f.DynamicClient()
+			if err != nil {
+				return err
+			}
+			helper := resource.NewHelper(info.Client, info.Mapping)
+			patcher := &patcher{
+				mapping:       info.Mapping,
+				helper:        helper,
+				dynamicClient: dClient,
+				overwrite:     true,
+				backOff:       clockwork.NewRealClock(),
+				force:         true,
+				cascade:       true,
+				timeout:       30 * time.Second,
+				gracePeriod:   30,
+				openapiSchema: nil,
+			}
+			return patcher.delete(info.Namespace, info.Name)
+		})
+}
+
 func doApply(
 	reader io.Reader,
 	getter genericclioptions.RESTClientGetter,

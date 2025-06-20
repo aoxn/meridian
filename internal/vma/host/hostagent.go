@@ -2,11 +2,9 @@ package hostagent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"github.com/aoxn/meridian/internal/server"
-	"github.com/aoxn/meridian/internal/tool/mapping"
-	"k8s.io/apimachinery/pkg/util/wait"
+	"github.com/aoxn/meridian/internal/vma/host/connectivity"
 	"net/http"
 
 	//"errors"
@@ -39,10 +37,11 @@ import (
 )
 
 type HostAgent struct {
-	vm  *model.Instance
-	ssh *sshutil.SSHMgr
-	ci  *cidata.CloudInit
-	fwd *forward.ForwardMgr
+	vm      *model.Instance
+	ssh     *sshutil.SSHMgr
+	ci      *cidata.CloudInit
+	fwd     *forward.ForwardMgr
+	connect *connectivity.Connectivity
 
 	driver backend.Driver
 
@@ -119,17 +118,19 @@ func New(vm *v1.VirtualMachine, stdout io.Writer, opts ...Opt) (*HostAgent, erro
 		}
 		return vz.New(base)
 	}
+	driver := newBackend()
 	sshMgr := sshutil.NewSSHMgr(inst.Name, "127.0.0.1", sshLocalPort)
 	a := &HostAgent{
-		vm:  inst,
-		ci:  cidata.NewCloudInit(inst, sshMgr),
-		fwd: forward.NewForwardMgr(),
-		ssh: sshMgr,
+		vm:      inst,
+		ci:      cidata.NewCloudInit(inst, sshMgr),
+		fwd:     forward.NewForwardMgr(),
+		connect: connectivity.NewConnectivity(forward.NewForwardMgr(), driver, inst),
+		ssh:     sshMgr,
 		// to be deleted
 		udpDNSLocalPort:   udpDNSLocalPort,
 		tcpDNSLocalPort:   tcpDNSLocalPort,
 		guestPort:         10443,
-		driver:            newBackend(),
+		driver:            driver,
 		guestAgentAliveCh: make(chan struct{}),
 	}
 	return a, nil
@@ -164,7 +165,7 @@ func (ha *HostAgent) Run(ctx context.Context) error {
 		ha.ssh.SetAddr(sshAddr)
 	}
 	go ha.Serve(ctx, ha.vm.Name)
-	go ha.reconcileMapping()
+	go ha.connect.SetMappingRoute()
 
 	if ha.vm.Vm().Video.Display == "vnc" {
 		vncdisplay, vncoptions, _ := strings.Cut(ha.vm.Vm().Video.VNC.Display, ",")
@@ -222,43 +223,43 @@ func (ha *HostAgent) Run(ctx context.Context) error {
 	return ha.startRoutinesAndWait(ctx, errCh)
 }
 
-func (ha *HostAgent) reconcileMapping() {
-	klog.Infof("[mapping]start reconcile upnp port mapping")
-	if !ha.vm.Vm().Request.Config.HasFeature(v1.FeatureSupportNodeGroups) {
-		klog.Infof("[mapping] nodegroups feature disabled, skip mapping")
-		return
-	}
-	for {
-		select {
-		case <-time.After(5 * time.Minute):
-			i := ha.vm.Vm().Request
-			port, err := strconv.Atoi(i.AccessPoint.APIPort)
-			if err != nil {
-				klog.Errorf("[mapping]failed to parse access point port: %s", err)
-				continue
-			}
-			tport, _ := strconv.Atoi(i.AccessPoint.TunnelPort)
-			klog.Infof("[mapping]periodical mapping port: %d", port)
-			for _, item := range []mapping.Item{
-				{
-					ExternalPort: port,
-					InternalPort: port,
-				},
-				{
-					ExternalPort: tport,
-					InternalPort: tport,
-				},
-			} {
-				err = mapping.AddMapping([]mapping.Item{item})
-				if err != nil {
-					klog.Errorf("[mapping]failed to add mapping: %s", err)
-					continue
-				}
-				klog.Infof("[mapping] port [%d] mapped", item.ExternalPort)
-			}
-		}
-	}
-}
+//func (ha *HostAgent) reconcileMapping() {
+//	klog.Infof("[mapping]start reconcile upnp port mapping")
+//	if !ha.vm.Vm().Request.Config.HasFeature(v1.FeatureSupportNodeGroups) {
+//		klog.Infof("[mapping] nodegroups feature disabled, skip mapping")
+//		return
+//	}
+//	for {
+//		select {
+//		case <-time.After(5 * time.Minute):
+//			i := ha.vm.Vm().Request
+//			port, err := strconv.Atoi(i.AccessPoint.APIPort)
+//			if err != nil {
+//				klog.Errorf("[mapping]failed to parse access point port: %s", err)
+//				continue
+//			}
+//			tport, _ := strconv.Atoi(i.AccessPoint.TunnelPort)
+//			klog.Infof("[mapping]periodical mapping port: %d", port)
+//			for _, item := range []mapping.Item{
+//				{
+//					ExternalPort: port,
+//					InternalPort: port,
+//				},
+//				{
+//					ExternalPort: tport,
+//					InternalPort: tport,
+//				},
+//			} {
+//				err = mapping.AddMapping([]mapping.Item{item})
+//				if err != nil {
+//					klog.Errorf("[mapping]failed to add mapping: %s", err)
+//					continue
+//				}
+//				klog.Infof("[mapping] port [%d] mapped", item.ExternalPort)
+//			}
+//		}
+//	}
+//}
 
 func (ha *HostAgent) GenDisk(ctx context.Context) error {
 	guestBin := filepath.Join(ha.vm.Dir, v1.GuestBin)
@@ -331,7 +332,7 @@ func (ha *HostAgent) startRoutinesAndWait(ctx context.Context, errCh chan error)
 	stBooting := stBase
 	ha.emitEvent(ctx, event.Event{Status: stBooting})
 	go func() {
-		err := ha.setPortForward(ctx)
+		err := ha.connect.Forward(ctx)
 		if err != nil {
 			errCh <- err
 		}
@@ -413,86 +414,71 @@ func (ha *HostAgent) watchGuestAgentEvents(ctx context.Context) {
 	}
 }
 
-func (ha *HostAgent) setPortForward(ctx context.Context) error {
-	addr, err := ha.waitForAddress(ctx)
-	if err != nil {
-		return err
-	}
-	dialer, err := ha.driver.Dialer(ctx)
-	if err != nil {
-		return err
-	}
-	ha.vm.Spec.SetPortForward(v1.PortForward{
-		Proto:       "tcp",
-		Source:      fmt.Sprintf("0.0.0.0:%s", ha.vm.Spec.Request.AccessPoint.TunnelPort),
-		Destination: fmt.Sprintf("%s:8132", addr),
-	})
-	for _, f := range ha.vm.Spec.PortForwards {
-		if f.VSockPort > 0 {
-			rule := fmt.Sprintf("%s://%s->vsock://%d", f.Proto, f.Source, f.VSockPort)
-			err = ha.fwd.AddBy(rule, dialer)
-			if err != nil {
-				return fmt.Errorf("add forwarding rule[vsock]:[%s] %s", rule, err.Error())
-			}
-		} else {
-			rule := fmt.Sprintf("%s://%s->%s://%s", f.Proto, f.Source, f.Proto, f.Destination)
-			err = ha.fwd.AddBy(rule)
-			if err != nil {
-				return fmt.Errorf("add forwarding rule:[%s] %s", rule, err.Error())
-			}
-		}
-	}
-	return nil
-}
-
-func (ha *HostAgent) waitForAddress(ctx context.Context) (string, error) {
-	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
-		return ha.driver.GuestAgentConn(ctx)
-	}
-	client := http.Client{
-		Transport: &http.Transport{DialContext: dial},
-	}
-	var addr = ""
-	waitFunc := func(ctx context.Context) (bool, error) {
-		r, err := client.Get(fmt.Sprintf("http://localhost/apis/xdpin.cn/v1/guestinfos/%s", ha.vm.Name))
-		if err != nil {
-			klog.Errorf("wait guest info: %s", err.Error())
-			return false, nil
-		}
-		klog.Infof("debug wait: %+v", r)
-		defer r.Body.Close()
-		if r.StatusCode != http.StatusOK {
-			return false, nil
-		}
-		data, err := io.ReadAll(r.Body)
-		if err != nil {
-			return false, nil
-		}
-		var guest v1.GuestInfo
-		err = json.Unmarshal(data, &guest)
-		if err != nil {
-			return false, nil
-		}
-		klog.Infof("[%s]wait guest server: %s, [%s]", ha.vm.Name, guest.Spec.Address, guest.Status.Phase)
-		if guest.Status.Phase != v1.Running {
-			klog.Infof("guest status is not running: [%s]", guest.Status.Phase)
-			return false, nil
-		}
-		for _, ad := range guest.Spec.Address {
-			if strings.Contains(ad, "192.168") {
-				addr = ad
-				return true, nil
-			}
-		}
-		return false, nil
-	}
-
-	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 5*time.Minute, false, waitFunc)
-	if err != nil {
-		return "", err
-	}
-	return addr, err
-}
+//func (ha *HostAgent) setPortForward(ctx context.Context) error {
+//	addr, err := ha.waitForAddress(ctx)
+//	if err != nil {
+//		return err
+//	}
+//	dialer, err := ha.driver.Dialer(ctx)
+//	if err != nil {
+//		return err
+//	}
+//	ha.vm.Spec.SetPortForward(v1.PortForward{
+//		Proto:       "tcp",
+//		Source:      fmt.Sprintf("0.0.0.0:%s", ha.vm.Spec.Request.AccessPoint.TunnelPort),
+//		Destination: fmt.Sprintf("%s:8132", addr),
+//	})
+//	for _, f := range ha.vm.Spec.PortForwards {
+//		if f.VSockPort > 0 {
+//			rule := fmt.Sprintf("%s://%s->vsock://%d", f.Proto, f.Source, f.VSockPort)
+//			err = ha.fwd.AddBy(rule, dialer)
+//			if err != nil {
+//				return fmt.Errorf("add forwarding rule[vsock]:[%s] %s", rule, err.Error())
+//			}
+//		} else {
+//			rule := fmt.Sprintf("%s://%s->%s://%s", f.Proto, f.Source, f.Proto, f.Destination)
+//			err = ha.fwd.AddBy(rule)
+//			if err != nil {
+//				return fmt.Errorf("add forwarding rule:[%s] %s", rule, err.Error())
+//			}
+//		}
+//	}
+//	return nil
+//}
+//
+//func (ha *HostAgent) waitForAddress(ctx context.Context) (string, error) {
+//	client, err := user.ClientWith(func(ctx context.Context, network, addr string) (net.Conn, error) {
+//		return ha.driver.GuestAgentConn(ctx)
+//	})
+//	if err != nil {
+//		return "", err
+//	}
+//
+//	var addr = ""
+//	waitFunc := func(ctx context.Context) (bool, error) {
+//		var guest = v1.EmptyGI(ha.vm.Name)
+//		err = client.Get(ctx, guest)
+//		if err != nil {
+//			klog.Errorf("wait guest info: %s", err.Error())
+//			return false, nil
+//		}
+//		klog.Infof("[%s]wait guest server: %s, [%s]", ha.vm.Name, guest.Spec.Address, guest.Status.Phase)
+//		if guest.Status.Phase != v1.Running {
+//			klog.Infof("guest status is not running: [%s]", guest.Status.Phase)
+//			return false, nil
+//		}
+//		for _, ad := range guest.Spec.Address {
+//			if strings.Contains(ad, "192.168") {
+//				addr = ad
+//				return true, nil
+//			}
+//		}
+//		return false, nil
+//	}
+//
+//	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 5*time.Minute, false, waitFunc)
+//	return addr, err
+//}
 
 const (
 	verbForward = "forward"

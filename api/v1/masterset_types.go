@@ -94,7 +94,11 @@ type ClusterConfig struct {
 }
 
 func (cfg *ClusterConfig) HasFeature(feature string) bool {
-	_, ok := cfg.Features[feature]
+	return HasFeature(cfg.Features, feature)
+}
+
+func HasFeature(features map[string]string, feature string) bool {
+	_, ok := features[feature]
 	return ok
 }
 

@@ -33,6 +33,21 @@ func Client(ep string) (Interface, error) {
 	return New(rclient), nil
 }
 
+func ClientWith(dialer func(ctx context.Context, network, addr string) (net.Conn, error)) (Interface, error) {
+	cfg := rest.Config{
+		Host:        "localhost",
+		DialContext: dialer,
+		ContentType: "application/json",
+		UserAgent:   "kubernetes.meridian",
+	}
+	klog.V(8).Infof("use dial context")
+	rclient, err := rest.RESTClientFor(&cfg)
+	if err != nil {
+		return nil, err
+	}
+	return New(rclient), nil
+}
+
 func GetClient() (Interface, error) {
 	rest, err := Rest()
 	if err != nil {

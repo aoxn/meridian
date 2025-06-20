@@ -89,8 +89,7 @@ func (r *nodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return reconcile.Result{}, nil
 	}
 
-	_, ok := node.Labels["node-role.kubernetes.io/control-plane"]
-	if !ok {
+	if tool.NodeIsMaster(&node) {
 		return reconcile.Result{}, nil
 	}
 

@@ -70,6 +70,29 @@ func (r *NodeGroup) ReconcileNodeGroupAddons(ctx context.Context, ng *v1.NodeGro
 	if err != nil {
 		return errors.Wrapf(err, "get kubernetes request")
 	}
+	if !ng.DeletionTimestamp.IsZero() {
+		for _, addon := range ng.Status.Addons {
+			klog.Infof("trying to delete addon: %s for nodegroup [%s]", addon.Name, ng.Name)
+			data := &addons.RenderData{
+				R:         &req,
+				NodeGroup: ng.Name,
+				AuthInfo:  cfg.AuthInfo,
+			}
+			// apply 组件
+			ymlData, err := addons.RenderAddon(addon.Name, data)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			klog.V(8).Infof("debug delete addon yaml: %s", ymlData)
+			err = kubeclient.DeleteInCluster(ymlData)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+		}
+		return errs
+	}
 	// 如果集群没有安装节点组件，则安装，并更新组件status
 	for _, addon := range ng.Spec.Addons {
 		found := false

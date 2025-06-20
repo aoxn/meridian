@@ -2,6 +2,7 @@ package controller
 
 import (
 	"github.com/aoxn/meridian/internal/controller/infra"
+	"github.com/aoxn/meridian/internal/controller/infra/nodes"
 	"github.com/aoxn/meridian/internal/controller/raven"
 	"github.com/aoxn/meridian/internal/controller/xdpin"
 	"k8s.io/klog/v2"
@@ -20,6 +21,7 @@ func init() {
 	//modules = append(modules, xdpin.Add)
 	modules = append(modules, infra.AddNode)
 	modules = append(modules, infra.AddNodeGroup)
+	modules = append(modules, nodes.AddNodeCleanup)
 
 	modules = append(modules, raven.AddGatewayWebhook)
 	modules = append(modules, infra.AddApproveController)

@@ -3,13 +3,17 @@ package ess
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 	"github.com/aoxn/meridian/internal/cloud"
 	"github.com/aoxn/meridian/internal/cloud/alibaba/client"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+	"strings"
 	"time"
 )
 
@@ -23,9 +27,24 @@ type instance struct {
 	*client.ClientMgr
 }
 
+func (n *instance) GetInstanceId(node *corev1.Node) string {
+	parts := strings.Split(node.Spec.ProviderID, ".")
+	return lo.Ternary(len(parts) != 2, "", parts[1])
+}
+
 func (n *instance) FindInstance(ctx context.Context, id cloud.Id) (cloud.InstanceModel, error) {
-	//TODO implement me
-	panic("implement me")
+	req := ecs.CreateDescribeInstanceAttributeRequest()
+	req.InstanceId = id.Id
+	_, err := n.ECS.DescribeInstanceAttribute(req)
+	if err != nil {
+		if strings.Contains(err.Error(), "not exist") {
+			return cloud.InstanceModel{}, fmt.Errorf("NotFound: %s", id.Id)
+		}
+		return cloud.InstanceModel{}, err
+	}
+	return cloud.InstanceModel{
+		Tag: []cloud.Tag{},
+	}, nil
 }
 
 func (n *instance) ListInstance(ctx context.Context, i cloud.Id) ([]cloud.InstanceModel, error) {

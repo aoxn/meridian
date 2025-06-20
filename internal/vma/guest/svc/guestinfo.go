@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	v1 "github.com/aoxn/meridian/api/v1"
@@ -215,7 +216,8 @@ func GetLocalIP() ([]string, error) {
 	for _, address := range addrs {
 		ipnet, ok := address.(*net.IPNet)
 		if ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
+			addr := ipnet.IP.String()
+			if addr != "" && !strings.HasPrefix(addr, "169.254") {
 				addresses = append(addresses, ipnet.IP.String())
 			}
 		}

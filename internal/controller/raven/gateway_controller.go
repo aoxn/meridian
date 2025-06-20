@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	v1 "github.com/aoxn/meridian/api/v1"
-	"github.com/aoxn/meridian/internal/controller/common"
 	"github.com/aoxn/meridian/internal/controller/raven/predicator"
 	"github.com/aoxn/meridian/internal/tool"
 	"github.com/pkg/errors"
@@ -97,10 +96,10 @@ func addGateway(mgr manager.Manager, r reconcile.Reconciler) error {
 				if !ok {
 					return false
 				}
-				if cm.GetNamespace() != common.WorkingNamespace {
+				if cm.GetNamespace() != tool.WorkingNamespace {
 					return false
 				}
-				if cm.GetName() != common.RavenGlobalConfig {
+				if cm.GetName() != tool.RavenGlobalConfig {
 					return false
 				}
 				return true
@@ -166,7 +165,7 @@ func (r *reconcileGateway) Reconcile(ctx context.Context, req reconcile.Request)
 		}
 		nodes = append(nodes, ravenv1beta1.NodeInfo{
 			NodeName:  v.Name,
-			PrivateIP: common.GetNodeInternalIP(v),
+			PrivateIP: tool.GetNodeInternalIP(v),
 			Subnets:   podCIDRs,
 		})
 	}
@@ -266,7 +265,7 @@ func (r *reconcileGateway) electActiveEndpoint(nodeList corev1.NodeList, gw *rav
 	// get all ready nodes referenced by endpoints
 	readyNodes := make(map[string]*corev1.Node)
 	for _, v := range nodeList.Items {
-		if common.IsNodeReady(v) {
+		if tool.IsNodeReady(v) {
 			readyNodes[v.Name] = &v
 		}
 	}
@@ -392,9 +391,9 @@ func (r *reconcileGateway) configEndpoints(ctx context.Context, gw *ravenv1beta1
 		}
 		switch val.Type {
 		case ravenv1beta1.Proxy:
-			gw.Status.ActiveEndpoints[idx].Config[common.RavenEnableProxy] = strconv.FormatBool(enableProxy)
+			gw.Status.ActiveEndpoints[idx].Config[tool.RavenEnableProxy] = strconv.FormatBool(enableProxy)
 		case ravenv1beta1.Tunnel:
-			gw.Status.ActiveEndpoints[idx].Config[common.RavenEnableTunnel] = strconv.FormatBool(enableTunnel)
+			gw.Status.ActiveEndpoints[idx].Config[tool.RavenEnableTunnel] = strconv.FormatBool(enableTunnel)
 		default:
 		}
 	}
@@ -402,10 +401,10 @@ func (r *reconcileGateway) configEndpoints(ctx context.Context, gw *ravenv1beta1
 }
 
 func (r *reconcileGateway) addExtraAllowedSubnet(gw *ravenv1beta1.Gateway) {
-	if gw.Annotations == nil || gw.Annotations[common.ExtraAllowedSourceCIDRs] == "" {
+	if gw.Annotations == nil || gw.Annotations[tool.ExtraAllowedSourceCIDRs] == "" {
 		return
 	}
-	subnets := strings.Split(gw.Annotations[common.ExtraAllowedSourceCIDRs], ",")
+	subnets := strings.Split(gw.Annotations[tool.ExtraAllowedSourceCIDRs], ",")
 	var gatewayName string
 	for _, aep := range gw.Status.ActiveEndpoints {
 		if aep.Type == ravenv1beta1.Tunnel {

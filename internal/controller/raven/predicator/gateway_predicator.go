@@ -18,7 +18,7 @@ package predicator
 
 import (
 	"context"
-	"github.com/aoxn/meridian/internal/controller/common"
+	"github.com/aoxn/meridian/internal/tool"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/util/workqueue"
@@ -71,7 +71,7 @@ func (e *EnqueueGatewayForNode) Update(ctx context.Context, evt event.UpdateEven
 
 	// check if NodeReady condition changed
 	statusChanged := func(oldObj, newObj *corev1.Node) bool {
-		return common.IsNodeReady(*oldObj) != common.IsNodeReady(*newObj)
+		return tool.IsNodeReady(*oldObj) != tool.IsNodeReady(*newObj)
 	}
 
 	if oldGwName != newGwName || statusChanged(oldNode, newNode) {

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/aoxn/meridian/internal/controller/raven/predicator"
+	"github.com/aoxn/meridian/internal/tool"
 	"net"
 	"sort"
 	"strconv"
@@ -43,7 +44,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/aoxn/meridian/internal/controller/common"
 	ravenv1beta1 "github.com/openyurtio/openyurt/pkg/apis/raven/v1beta1"
 )
 
@@ -103,10 +103,10 @@ func addGatewayInternal(mgr manager.Manager, r reconcile.Reconciler) error {
 				if !ok {
 					return false
 				}
-				if cm.GetNamespace() != common.WorkingNamespace {
+				if cm.GetNamespace() != tool.WorkingNamespace {
 					return false
 				}
-				if cm.GetName() != common.RavenAgentConfig {
+				if cm.GetName() != tool.RavenAgentConfig {
 					return false
 				}
 				return true
@@ -156,14 +156,14 @@ func CheckServer(ctx context.Context, client client.Client) (enableProxy, enable
 	var cm corev1.ConfigMap
 	enableTunnel = false
 	enableProxy = false
-	err := client.Get(ctx, types.NamespacedName{Namespace: common.WorkingNamespace, Name: common.RavenGlobalConfig}, &cm)
+	err := client.Get(ctx, types.NamespacedName{Namespace: tool.WorkingNamespace, Name: tool.RavenGlobalConfig}, &cm)
 	if err != nil {
 		return enableProxy, enableTunnel
 	}
-	if val, ok := cm.Data[common.RavenEnableProxy]; ok && strings.ToLower(val) == "true" {
+	if val, ok := cm.Data[tool.RavenEnableProxy]; ok && strings.ToLower(val) == "true" {
 		enableProxy = true
 	}
-	if val, ok := cm.Data[common.RavenEnableTunnel]; ok && strings.ToLower(val) == "true" {
+	if val, ok := cm.Data[tool.RavenEnableTunnel]; ok && strings.ToLower(val) == "true" {
 		enableTunnel = true
 	}
 	return enableProxy, enableTunnel
@@ -254,20 +254,20 @@ func (r *reconcileGatewayInternalService) getTargetPort() (insecurePort, secureP
 	insecurePort = ravenv1beta1.DefaultProxyServerInsecurePort
 	securePort = ravenv1beta1.DefaultProxyServerSecurePort
 	var cm corev1.ConfigMap
-	err := r.Get(context.TODO(), types.NamespacedName{Namespace: common.WorkingNamespace, Name: common.RavenAgentConfig}, &cm)
+	err := r.Get(context.TODO(), types.NamespacedName{Namespace: tool.WorkingNamespace, Name: tool.RavenAgentConfig}, &cm)
 	if err != nil {
 		return
 	}
 	if cm.Data == nil {
 		return
 	}
-	_, internalInsecurePort, err := net.SplitHostPort(cm.Data[common.ProxyServerInsecurePortKey])
+	_, internalInsecurePort, err := net.SplitHostPort(cm.Data[tool.ProxyServerInsecurePortKey])
 	if err == nil {
 		insecure, _ := strconv.Atoi(internalInsecurePort)
 		insecurePort = int32(insecure)
 	}
 
-	_, internalSecurePort, err := net.SplitHostPort(cm.Data[common.ProxyServerSecurePortKey])
+	_, internalSecurePort, err := net.SplitHostPort(cm.Data[tool.ProxyServerSecurePortKey])
 	if err == nil {
 		secure, _ := strconv.Atoi(internalSecurePort)
 		securePort = int32(secure)
@@ -397,7 +397,7 @@ func (r *reconcileGatewayInternalService) ensureSpecEndpoints(ctx context.Contex
 				continue
 			}
 			specAddresses = append(specAddresses, corev1.EndpointAddress{
-				IP:       common.GetNodeInternalIP(node),
+				IP:       tool.GetNodeInternalIP(node),
 				NodeName: func(n corev1.Node) *string { return &n.Name }(node),
 			})
 		}

@@ -95,7 +95,7 @@ func (r *nodeGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.Get(ctx, client.ObjectKey{Name: req.Name}, &ng); err != nil {
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
-	pd, err := newCloud(r.Client, &ng)
+	pd, err := cloud.NewCloud(r.Client, ng.Spec.Provider)
 	if err != nil {
 		klog.Errorf("init cloud provider[%s] with error: %s", ng.Spec.Provider, err.Error())
 		return ctrl.Result{}, err
@@ -182,6 +182,10 @@ func toScalingModel(ng *v1.NodeGroup, ud string) cloud.ScalingGroupModel {
 }
 
 func (r *nodeGroupReconciler) createNodeGroupAddons(ctx context.Context, ng *v1.NodeGroup, cfg cloud.Config) error {
+	return common.NewNodeGroup(r.Client).ReconcileNodeGroupAddons(ctx, ng, cfg)
+}
+
+func (r *nodeGroupReconciler) deleteNodeGroupAddons(ctx context.Context, ng *v1.NodeGroup, cfg cloud.Config) error {
 	return common.NewNodeGroup(r.Client).ReconcileNodeGroupAddons(ctx, ng, cfg)
 }
 
@@ -323,6 +327,10 @@ func (r *nodeGroupReconciler) teardown(pd cloud.Cloud, ng *v1.NodeGroup) error {
 		if err != nil {
 			klog.Errorf("delete worker gateway[gw-%s], %s", ng.Name, err.Error())
 		}
+	}
+	err = r.deleteNodeGroupAddons(ctx, ng, pd.GetConfig())
+	if err != nil {
+		return errors.Wrapf(err, "delete node group addons %s", ng.Name)
 	}
 	scgrpId := ng.Spec.ScalingGroup.ScalingGroupId
 	if scgrpId != "" {
@@ -663,37 +671,21 @@ func (r *nodeGroupReconciler) getUserData(ng *v1.NodeGroup, cfg cloud.Config) (s
 	klog.Infof("use public ip from api access point [%s] for userdata", publicIp)
 	return tool.RenderConfig(
 		"userdata", userdata, struct {
-			Token     string
-			Endpoint  string
-			Group     string
-			CloudType string
+			Token         string
+			Endpoint      string
+			Group         string
+			CloudType     string
+			ProviderLabel string
+			ProviderName  string
 		}{
-			Endpoint:  fmt.Sprintf("%s:%s", publicIp, req.Spec.AccessPoint.APIPort),
-			Group:     ng.Name,
-			CloudType: cfg.Type,
-			Token:     req.Spec.Config.Token,
+			Endpoint:      fmt.Sprintf("%s:%s", publicIp, req.Spec.AccessPoint.APIPort),
+			Group:         ng.Name,
+			CloudType:     cfg.Type,
+			Token:         req.Spec.Config.Token,
+			ProviderLabel: tool.NODE_PROVIDER_LABEL,
+			ProviderName:  ng.Spec.Provider,
 		},
 	)
-}
-
-func newCloud(
-	r client.Client,
-	ng *v1.NodeGroup,
-) (cloud.Cloud, error) {
-	provider := ng.Spec.Provider
-	if provider == "" {
-		return nil, fmt.Errorf("node provider is empty")
-	}
-	var pv v1.Provider
-	err := r.Get(context.TODO(), client.ObjectKey{Name: provider}, &pv)
-	if err != nil {
-		return nil, err
-	}
-	pdFunc, err := cloud.Get(pv.Spec.Type)
-	if err != nil {
-		return nil, err
-	}
-	return pdFunc(cloud.Config{AuthInfo: pv.Spec.AuthInfo})
 }
 
 func toVSwitchModel(abc []v1.VSwitch) []cloud.VSwitchModel {
@@ -837,12 +829,13 @@ OS=$(uname|tr '[:upper:]' '[:lower:]')
 arch=$(uname -m|tr '[:upper:]' '[:lower:]')
 case $arch in
 "amd64")
-        arch=x86_64
+        arch=amd64
         ;;
 "arm64")
-        arch=aarch64
+        arch=arm64
         ;;
 "x86_64")
+	arch=amd64
 	;;
 *)
         echo "unknown arch: ${arch} for ${OS}"; exit 1
@@ -852,12 +845,12 @@ esac
 server=http://host-wdrip-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com
 
 need_install=0
-if [[ -f /usr/local/bin/meridian ]];
+if [[ -f /usr/local/bin/meridian-node ]];
 then
-        wget -q -O /tmp/meridian.${OS}.${arch}.tar.gz.sum \
-                $server/bin/${OS}/${arch}/${version}/meridian.${OS}.${arch}.tar.gz.sum
-        m1=$(cat /tmp/meridian.${OS}.${arch}.tar.gz.sum |awk '{print $1}')
-        m2=$(md5sum /usr/local/bin/meridian |awk '{print $1}')
+        wget -q -O /tmp/meridian-node.${OS}.${arch}.tar.gz.sum \
+                $server/bin/${OS}/${arch}/${version}/meridian-node.${OS}.${arch}.tar.gz.sum
+        m1=$(cat /tmp/meridian-node.${OS}.${arch}.tar.gz.sum |awk '{print $1}')
+        m2=$(md5sum /usr/local/bin/meridian-node |awk '{print $1}')
         if [[ "$m1" == "$m2" ]];
         then
                 need_install=0
@@ -870,15 +863,19 @@ fi
 
 if [[ "$need_install" == "1" ]];
 then
-        wget -q -O /tmp/meridian.${OS}.${arch}.tar.gz \
-                $server/bin/${OS}/${arch}/${version}/meridian.${OS}.${arch}.tar.gz
+        wget -q -O /tmp/meridian-node.${OS}.${arch}.tar.gz \
+                $server/bin/${OS}/${arch}/${version}/meridian-node.${OS}.${arch}.tar.gz
 
-        wget -q -O /tmp/meridian.${OS}.${arch}.tar.gz.sum \
-                $server/bin/${OS}/${arch}/${version}/meridian.${OS}.${arch}.tar.gz.sum
-        tar xf /tmp/meridian.${OS}.${arch}.tar.gz -C /tmp
-        sudo mv -f /tmp/bin/meridian.${OS}.${arch} /usr/local/bin/meridian
-        rm -rf /tmp/meridian.${OS}.${arch}.tar.gz /tmp/meridian.${OS}.${arch}.tar.gz.sum
+        wget -q -O /tmp/meridian-node.${OS}.${arch}.tar.gz.sum \
+                $server/bin/${OS}/${arch}/${version}/meridian-node.${OS}.${arch}.tar.gz.sum
+        tar xf /tmp/meridian-node.${OS}.${arch}.tar.gz -C /tmp
+        sudo mv -f /tmp/bin/meridian-node.${OS}.${arch} /usr/local/bin/meridian-node
+        rm -rf /tmp/meridian-node.${OS}.${arch}.tar.gz /tmp/meridian-node.${OS}.${arch}.tar.gz.sum
 fi
 
-/usr/local/bin/meridian join --role worker --api-server {{ .Endpoint }} --token {{ .Token }} --group "{{ .Group }}" --cloud "{{ .CloudType}}"
+/usr/local/bin/meridian-node join --role worker \
+	--api-server {{ .Endpoint }} \
+	--token {{ .Token }} \
+	--group "{{ .Group }}" \
+	--cloud "{{ .CloudType}}" -l "{{.ProviderLabel}}={{.ProviderName}}"
 `

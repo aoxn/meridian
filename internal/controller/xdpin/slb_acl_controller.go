@@ -5,17 +5,20 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"strings"
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/slb"
 	"github.com/aoxn/meridian/internal/tool/address"
 )
 
-func NewSLBACL() Periodical {
-	return &slbAcl{}
+func NewSLBACL(mgr manager.Manager) Periodical {
+	return &slbAcl{mgr: mgr}
 }
 
 type slbAcl struct {
+	mgr manager.Manager
 }
 
 func (s *slbAcl) Name() string {
@@ -27,30 +30,39 @@ func (s *slbAcl) Schedule() string {
 }
 
 func (s *slbAcl) Run(options Options) error {
-	return EnsureACL()
+	return EnsureACL(s.mgr.GetClient())
 }
 
-func EnsureACL() error {
-	cfg, err := LoadCfg()
+func EnsureACL(cli client.Client) error {
+	cfgKey := client.ObjectKey{
+		Name:      "xdpin.cfg",
+		Namespace: "kube-system",
+	}
+	cfg, err := Load(cli, cfgKey)
 	if err != nil {
-		return fmt.Errorf("load config failed:%s", err.Error())
+		return err
 	}
-	prvd := address.FindBy(cfg.LbACL.Provider)
-	if prvd == nil {
-		return fmt.Errorf("address provider not found")
+	if cfg.LbACL.Provider == "" {
+		return nil
 	}
-	ip, err := prvd.GetAddr()
+	ip, err := address.GetAddress()
 	if err != nil {
 		return fmt.Errorf("ip fetch failed: %s", err.Error())
 	}
 	if ip.IPv4 == nil {
 		return fmt.Errorf("ip not found: %v", err)
 	}
-	auth := cfg.LbACL.Auth
+	auth, err := GetAuth(cli, cfg.LbACL.Provider)
+	if err != nil {
+		return errors.Wrapf(err, "lbacl: get auth provider[%s] failed", cfg.LbACL.Provider)
+	}
+	if auth.Spec.AccessKey == "" || auth.Spec.AccessSecret == "" {
+		return fmt.Errorf("ddns: auth provider %s is invalid, empty acceessKey & secret", cfg.LbACL.Provider)
+	}
 	client, err := slb.NewClientWithAccessKey(
-		auth.Region,
-		auth.AccessKeyID,
-		auth.AccessKeySecret,
+		cfg.LbACL.Region,
+		auth.Spec.AccessKey,
+		auth.Spec.AccessSecret,
 	)
 	if err != nil {
 		return err

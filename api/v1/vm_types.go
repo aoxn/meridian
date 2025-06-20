@@ -59,15 +59,19 @@ type VirtualMachineSpec struct {
 }
 
 func (s *VirtualMachineSpec) SetPortForward(p PortForward) {
+	SetPortForward(s.PortForwards, p)
+}
+
+func SetPortForward(forwards []PortForward, p PortForward) {
 	found := false
-	for i := range s.PortForwards {
-		if s.PortForwards[i].Source == p.Source {
+	for i := range forwards {
+		if forwards[i].Source == p.Source {
 			found = true
-			s.PortForwards[i] = p
+			forwards[i] = p
 		}
 	}
 	if !found {
-		s.PortForwards = append(s.PortForwards, p)
+		forwards = append(forwards, p)
 	}
 }
 

@@ -23,7 +23,7 @@ func AddPeriodical(mgr manager.Manager) error {
 	}
 	tm := cron.New(cron.WithLocation(location))
 	for _, v := range []Periodical{
-		NewSLBACL(), NewSSHSGRP(), NewPortMapping(mgr), NewXdpDomain(),
+		NewSLBACL(mgr), NewSSHSGRP(mgr), NewPortMapping(mgr), NewXdpDomain(mgr),
 	} {
 		_, err := tm.AddFunc(v.Schedule(), func() {
 			err = v.Run(Options{})

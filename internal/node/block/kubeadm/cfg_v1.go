@@ -37,7 +37,7 @@ func NewInitCfg(req *v1.Request, host host.Host) string {
 			KubeletExtraArgs: map[string]string{
 				"cloud-provider": "external",
 			},
-			Name: host.NodeID(),
+			Name: host.NodeName(),
 		},
 	}
 	getSans := func() []string {

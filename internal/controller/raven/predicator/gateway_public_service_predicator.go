@@ -18,6 +18,7 @@ package predicator
 
 import (
 	"context"
+	"github.com/aoxn/meridian/internal/tool"
 	"net"
 
 	corev1 "k8s.io/api/core/v1"
@@ -28,7 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/aoxn/meridian/internal/controller/common"
 	ravenv1beta1 "github.com/openyurtio/openyurt/pkg/apis/raven/v1beta1"
 )
 
@@ -96,7 +96,7 @@ func needUpdate(newObj, oldObj *ravenv1beta1.Gateway) bool {
 		if newObj.Spec.ExposeType != oldObj.Spec.ExposeType {
 			return true
 		}
-		if common.HashObject(newObj.Status.ActiveEndpoints) != common.HashObject(oldObj.Status.ActiveEndpoints) {
+		if tool.HashObject(newObj.Status.ActiveEndpoints) != tool.HashObject(oldObj.Status.ActiveEndpoints) {
 			return true
 		}
 	}
@@ -122,11 +122,11 @@ func (h *EnqueueRequestForConfigEvent) Create(ctx context.Context, e event.Creat
 	if cm.Data == nil {
 		return
 	}
-	if _, _, err := net.SplitHostPort(cm.Data[common.ProxyServerExposedPortKey]); err == nil {
+	if _, _, err := net.SplitHostPort(cm.Data[tool.ProxyServerExposedPortKey]); err == nil {
 		addExposedGateway(h.client, q)
 		return
 	}
-	if _, _, err := net.SplitHostPort(cm.Data[common.VPNServerExposedPortKey]); err == nil {
+	if _, _, err := net.SplitHostPort(cm.Data[tool.VPNServerExposedPortKey]); err == nil {
 		addExposedGateway(h.client, q)
 		return
 	}
@@ -143,14 +143,14 @@ func (h *EnqueueRequestForConfigEvent) Update(ctx context.Context, e event.Updat
 		klog.Errorf("could not assert runtime Object %s/%s to v1.Configmap,", e.ObjectOld.GetNamespace(), e.ObjectOld.GetName())
 		return
 	}
-	_, newProxyPort, newErr := net.SplitHostPort(newCm.Data[common.ProxyServerExposedPortKey])
-	_, oldProxyPort, oldErr := net.SplitHostPort(oldCm.Data[common.ProxyServerExposedPortKey])
+	_, newProxyPort, newErr := net.SplitHostPort(newCm.Data[tool.ProxyServerExposedPortKey])
+	_, oldProxyPort, oldErr := net.SplitHostPort(oldCm.Data[tool.ProxyServerExposedPortKey])
 	if newErr == nil && oldErr == nil && newProxyPort != oldProxyPort {
 		addExposedGateway(h.client, q)
 		return
 	}
-	_, newTunnelPort, newErr := net.SplitHostPort(newCm.Data[common.VPNServerExposedPortKey])
-	_, oldTunnelPort, oldErr := net.SplitHostPort(oldCm.Data[common.VPNServerExposedPortKey])
+	_, newTunnelPort, newErr := net.SplitHostPort(newCm.Data[tool.VPNServerExposedPortKey])
+	_, oldTunnelPort, oldErr := net.SplitHostPort(oldCm.Data[tool.VPNServerExposedPortKey])
 	if newErr == nil && oldErr == nil && newTunnelPort != oldTunnelPort {
 		addExposedGateway(h.client, q)
 		return

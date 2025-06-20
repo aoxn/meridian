@@ -39,11 +39,11 @@ Spec:
 
   # CPUs
   # 🟢 Builtin default: min(4, host CPU cores)
-  cpus: 2
+  cpus: 4
 
   # Memory size
   # 🟢 Builtin default: min("4GiB", half of host memory)
-  memory: 4GiB
+  memory: 8GiB
 
   # Disk size
   # 🟢 Builtin default: "100GiB"

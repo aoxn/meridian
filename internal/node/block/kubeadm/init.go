@@ -65,7 +65,7 @@ func NewConfigTpl(
 	addr := fmt.Sprintf("https://%s:2379", host.NodeIP())
 	cfg := &ConfigTpl{
 		Request:       node,
-		NodeName:      host.NodeID(),
+		NodeName:      host.NodeName(),
 		EtcdEndpoints: []string{addr},
 	}
 	for _, o := range opt {

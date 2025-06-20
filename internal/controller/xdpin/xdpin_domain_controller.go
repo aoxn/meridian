@@ -1,24 +1,23 @@
 package xdpin
 
 import (
-	"context"
 	"fmt"
-	"net"
-	"strings"
-	"time"
-
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/alidns"
 	"github.com/aoxn/meridian/internal/tool/address"
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+	"net"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"strings"
 )
 
-func NewXdpDomain() Periodical {
-	return &xdpDomain{}
+func NewXdpDomain(mgr manager.Manager) Periodical {
+	return &xdpDomain{mgr: mgr}
 }
 
 type xdpDomain struct {
+	mgr manager.Manager
 }
 
 func (s *xdpDomain) Name() string {
@@ -30,23 +29,20 @@ func (s *xdpDomain) Schedule() string {
 }
 
 func (s *xdpDomain) Run(options Options) error {
-	cfg, err := LoadCfg()
+	cfgKey := client.ObjectKey{
+		Name:      "xdpin.cfg",
+		Namespace: "kube-system",
+	}
+	cfg, err := Load(s.mgr.GetClient(), cfgKey)
 	if err != nil {
 		return err
 	}
-	ddns, err := NewDDNS(&cfg)
+	ddns, err := NewDDNS(&cfg, s.mgr.GetClient())
 	if err != nil {
 		return errors.Wrapf(err, "build ddns failed")
 	}
 	klog.Info("start ddns watching and updating...")
 	return ddns.Sync(cfg.XdpDomain.DomainName)
-}
-
-func doDDNSUpdate() {
-	err := WatchAndUpdateDDNS()
-	if err != nil {
-		klog.Errorf("failed to watch ddns update: %v", err)
-	}
 }
 
 type MatchSet struct {
@@ -63,45 +59,25 @@ type UpdateSet struct {
 	Value    string
 }
 
-func WatchAndUpdateDDNS() error {
-
-	cfg, err := LoadCfg()
-	if err != nil {
-		return err
-	}
-	ddns, err := NewDDNS(&cfg)
-	if err != nil {
-		return errors.Wrapf(err, "build ddns failed")
-	}
-	klog.Info("start ddns watching and updating...")
-	wait.UntilWithContext(context.TODO(), func(cxt context.Context) {
-		err = ddns.Sync(cfg.XdpDomain.DomainName)
-		if err != nil {
-			klog.Errorf("sync ddns failed, %v", err)
-		}
-		klog.Infof("sync ddns record finished.[%s]", cfg.XdpDomain.DomainName)
-	}, 10*time.Minute)
-	return nil
-}
-
-func NewDDNS(f *Config) (*DDNS, error) {
+func NewDDNS(f *Config, cli client.Client) (*DDNS, error) {
 	if f.XdpDomain.DomainName == "" ||
 		f.XdpDomain.DomainRR == "" ||
-		f.XdpDomain.AccessKeyID == "" ||
-		f.XdpDomain.AccessKeySecret == "" ||
 		f.XdpDomain.Region == "" || f.XdpDomain.Provider == "" {
-		return nil, fmt.Errorf("ddns args must be set:[ domain-name, domain-rr, ak, secret, provider]")
+		return nil, fmt.Errorf("ddns args must be set:[ domain-name, domain-rr, region, authProvider]")
 	}
-	client, err := alidns.NewClientWithAccessKey(f.XdpDomain.Region, f.XdpDomain.AccessKeyID, f.XdpDomain.AccessKeySecret)
+	auth, err := GetAuth(cli, f.XdpDomain.Provider)
+	if err != nil {
+		return nil, errors.Wrapf(err, "ddns: get auth provider[%s] failed", f.XdpDomain.Provider)
+	}
+	if auth.Spec.AccessKey == "" || auth.Spec.AccessSecret == "" {
+		return nil, fmt.Errorf("ddns: auth provider %s is invalid, empty acceessKey & secret", f.XdpDomain.Provider)
+	}
+	dcli, err := alidns.NewClientWithAccessKey(f.XdpDomain.Region, auth.Spec.AccessKey, auth.Spec.AccessSecret)
 	if err != nil {
 		klog.Errorf("init client failed %s", err.Error())
 		return nil, errors.Wrapf(err, "init client failed")
 	}
-	prvd := address.FindBy(f.XdpDomain.Provider)
-	if prvd == nil {
-		return nil, errors.Errorf("provider not found: [%s], supported=%s", f.XdpDomain.Provider, address.Supported())
-	}
-	return &DDNS{client: client, domains: f.XdpDomain.DomainRR, prvd: prvd}, nil
+	return &DDNS{client: dcli, domains: f.XdpDomain.DomainRR, prvd: address.NewRoundRobin()}, nil
 }
 
 type DDNS struct {

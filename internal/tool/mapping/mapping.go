@@ -21,7 +21,7 @@ type Item struct {
 func AddMapping(items []Item) error {
 	klog.Infof("[mapping] start to discover mapping device")
 	ctx := context.TODO()
-	devices := u.Discover(ctx, 0, time.Second)
+	devices := u.Discover(ctx, 0, 10*time.Second)
 	if len(devices) <= 0 {
 		return fmt.Errorf("no router device discoverd")
 	}

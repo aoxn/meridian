@@ -75,7 +75,7 @@ func NewCommandDestroy() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			md, err := node.NewMeridianNode("init", v1.NodeRoleMaster, "", "", req)
+			md, err := node.NewMeridianNode("init", v1.NodeRoleMaster, "", "", req, []string{})
 			if err != nil {
 				return err
 			}
@@ -105,7 +105,7 @@ func NewCommandInit() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			md, err := node.NewMeridianNode(v1.ActionInit, v1.NodeRoleMaster, "", "", req)
+			md, err := node.NewMeridianNode(v1.ActionInit, v1.NodeRoleMaster, "", "", req, []string{})
 			if err != nil {
 				return errors.Wrapf(err, "meridian init")
 			}
@@ -123,6 +123,7 @@ func NewCommandJoin() *cobra.Command {
 		token     = ""
 		nodeGroup = ""
 		cloud     = ""
+		labels    []string
 	)
 	cmd := &cobra.Command{
 		Use:   "join",
@@ -138,7 +139,7 @@ func NewCommandJoin() *cobra.Command {
 			default:
 				return fmt.Errorf("invalid role: %s", role)
 			}
-			md, err := node.InitNode(v1.ActionJoin, v1.NodeRole(role), endpoint, token, nodeGroup, cloud)
+			md, err := node.InitNode(v1.ActionJoin, v1.NodeRole(role), endpoint, token, nodeGroup, cloud, labels)
 			if err != nil {
 				return errors.Wrapf(err, "init meridian node")
 			}
@@ -149,7 +150,7 @@ func NewCommandJoin() *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&endpoint, "api-server", "s", "", "meridian apiserver endpoint. eg. 192.168.1.1:6443")
 	cmd.PersistentFlags().StringVarP(&token, "token", "t", "", "meridian kubeadm join token")
 	cmd.PersistentFlags().StringVarP(&nodeGroup, "group", "g", "", "meridian node group")
-
+	cmd.PersistentFlags().StringSliceVarP(&labels, "label", "l", nil, "register node labels")
 	cmd.PersistentFlags().StringVarP(&cloud, "cloud", "c", "", "cloud type")
 	return cmd
 }

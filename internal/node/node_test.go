@@ -65,7 +65,7 @@ func TestNode(t *testing.T) {
 			Key: key, Cert: crt,
 		}
 	}
-	md, err := NewMeridianNode(api.ActionInit, api.NodeRoleMaster, "", "", &req)
+	md, err := NewMeridianNode(api.ActionInit, api.NodeRoleMaster, "", "", &req, []string{})
 	if err != nil {
 		t.Fatalf("run node initialize failed: %s", err.Error())
 	}

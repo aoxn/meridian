@@ -86,7 +86,7 @@ func (u *kubernetes) Create(ctx context.Context, obj runtime.Object, opt *metav1
 		return obj, fmt.Errorf("unexpected object type: %T, expect v1.Request", obj)
 	}
 	klog.Infof("ensure kubernetes for [%s]", u.GVR())
-	md, err := node.NewMeridianNode(v1.ActionInit, v1.NodeRoleMaster, "", "", req)
+	md, err := node.NewMeridianNode(v1.ActionInit, v1.NodeRoleMaster, "", "", req, []string{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to init meridian")
 	}

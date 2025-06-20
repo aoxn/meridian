@@ -40,7 +40,7 @@ func withSchema(api string) string {
 // 1. meridian host init 清理etcd、节点配置，然后重新初始化etcd和master节点。
 // 2. meridian host recover
 
-func InitNode(action string, role v1.NodeRole, apiserver, token, ng, cloud string) (*Meridian, error) {
+func InitNode(action string, role v1.NodeRole, apiserver, token, ng, cloud string, labels []string) (*Meridian, error) {
 	switch role {
 	case v1.NodeRoleWorker, v1.NodeRoleMaster:
 	default:
@@ -78,7 +78,7 @@ func InitNode(action string, role v1.NodeRole, apiserver, token, ng, cloud strin
 	if err != nil {
 		return &md, errors.Wrap(err, "failed to get request")
 	}
-	return NewMeridianNode(action, role, ng, cloud, &req)
+	return NewMeridianNode(action, role, ng, cloud, &req, labels)
 }
 
 func newControllerClient(cfg *rest.Config) (client.Client, error) {
@@ -101,12 +101,14 @@ func NewMeridianNode(
 	ng string,
 	cloud string,
 	req *v1.Request,
+	labels []string,
 ) (*Meridian, error) {
 	return &Meridian{
 		request:   req,
 		cloud:     cloud,
 		role:      role,
 		nodeGroup: ng,
+		labels:    labels,
 		action:    action,
 	}, nil
 }
@@ -114,6 +116,7 @@ func NewMeridianNode(
 type Meridian struct {
 	nodeGroup string
 	cloud     string
+	labels    []string
 	// role of node
 	action  string // be one of [init|join]
 	role    v1.NodeRole
@@ -182,7 +185,7 @@ func (m *Meridian) DestroyNode() error {
 	if err != nil {
 		return errors.Wrap(err, "new runtime block while")
 	}
-	kubeletBlock, err := kubeadm.NewKubeletBlock(m.request, local, m.role, m.nodeGroup)
+	kubeletBlock, err := kubeadm.NewKubeletBlock(m.request, local, m.role, m.nodeGroup, m.labels)
 	if err != nil {
 		return errors.Wrap(err, "new kubelet block while")
 	}
@@ -215,7 +218,7 @@ func (m *Meridian) buildActionBlocks(local host.Host) ([]block.Block, error) {
 		return nil, errors.Wrap(err, "new containerd block while")
 	}
 
-	kubeletBlock, err := kubeadm.NewKubeletBlock(m.request, local, m.role, m.nodeGroup)
+	kubeletBlock, err := kubeadm.NewKubeletBlock(m.request, local, m.role, m.nodeGroup, m.labels)
 	if err != nil {
 		return nil, errors.Wrap(err, "new kubelet block while")
 	}

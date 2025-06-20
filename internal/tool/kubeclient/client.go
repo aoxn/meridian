@@ -41,7 +41,7 @@ func (kc *KubeClient) initClient() error {
 	}
 	var (
 		address = "127.0.0.1"
-		request = kc.request
+		request *api.RequestSpec
 	)
 	switch kc.side {
 	case "guest":
@@ -54,12 +54,14 @@ func (kc *KubeClient) initClient() error {
 				break
 			}
 		}
+		request = &kc.vm.Spec.Request
 	case "host":
+		request = &kc.request.Spec
 		klog.Infof("build local kubernetes client config")
 	default:
 		return fmt.Errorf("unimplenmented host kubeclient: %s", kc.vm.Name)
 	}
-	root := request.Spec.Config.TLS["root"]
+	root := request.Config.TLS["root"]
 	key, crt, err := sign.SignKubernetesClient(root.Cert, root.Key, []string{})
 	if err != nil {
 		return fmt.Errorf("sign kubernetes client crt: %s", err.Error())

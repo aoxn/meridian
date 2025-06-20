@@ -2,19 +2,21 @@ package xdpin
 
 import (
 	"fmt"
-	"k8s.io/klog/v2"
-	"strings"
-	"time"
-
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 	"github.com/aoxn/meridian/internal/tool/address"
+	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"strings"
 )
 
-func NewSSHSGRP() Periodical {
-	return &sshSgrp{}
+func NewSSHSGRP(mgr manager.Manager) Periodical {
+	return &sshSgrp{mgr: mgr}
 }
 
 type sshSgrp struct {
+	mgr manager.Manager
 }
 
 func (s *sshSgrp) Name() string {
@@ -31,51 +33,19 @@ func (s *sshSgrp) Run(options Options) error {
 		return err
 	}
 	klog.Infof("sync security group: %s", cfg.SSHSecrurityGroup.SecurityGroupID)
-	err = EnsureSecurityGroup(&cfg)
+	err = EnsureSecurityGroup(s.mgr.GetClient(), &cfg)
 	if err != nil {
 		klog.Errorf("ensure security group failed: %s", err.Error())
 	}
 
-	return EnsureACL()
+	return EnsureACL(s.mgr.GetClient())
 }
 
-func WaitAndUpdate() {
-	// aliyun has minimum TTL 600 (s)
-	t := time.NewTicker(11 * time.Minute)
-	defer t.Stop()
-
-	for {
-		cfg, err := LoadCfg()
-		if err != nil {
-			klog.Errorf("xdpin waitAndUpdate err: %v", err)
-			continue
-		}
-		klog.Infof("sync security group: %s", cfg.SSHSecrurityGroup.SecurityGroupID)
-		select {
-		case <-t.C:
-			err := EnsureSecurityGroup(&cfg)
-			if err != nil {
-				klog.Errorf("ensure security group failed: %s", err.Error())
-			}
-
-			err = EnsureACL()
-			if err != nil {
-				klog.Errorf("ensure acl group failed: %s", err.Error())
-			}
-			klog.Infof("tick for next security group update in 11 minutes: %s", cfg.SSHSecrurityGroup.SecurityGroupID)
-
-		}
+func EnsureSecurityGroup(cli client.Client, f *Config) error {
+	if f.SSHSecrurityGroup.Provider == "" {
+		return nil
 	}
-
-}
-
-func EnsureSecurityGroup(f *Config) error {
-
-	prvd := address.FindBy(f.SSHSecrurityGroup.Provider)
-	if prvd == nil {
-		return fmt.Errorf("address provider not found: %s", f.SSHSecrurityGroup.Provider)
-	}
-	ip, err := prvd.GetAddr()
+	ip, err := address.GetAddress()
 	if err != nil {
 		return fmt.Errorf("ip fetch failed: %s", err.Error())
 	}
@@ -83,12 +53,17 @@ func EnsureSecurityGroup(f *Config) error {
 		return fmt.Errorf("ip not found: %s", err.Error())
 	}
 
-	auth := f.SSHSecrurityGroup.Auth
-
+	auth, err := GetAuth(cli, f.SSHSecrurityGroup.Provider)
+	if err != nil {
+		return errors.Wrapf(err, "sg: get auth provider[%s] failed", f.SSHSecrurityGroup.Provider)
+	}
+	if auth.Spec.AccessKey == "" || auth.Spec.AccessSecret == "" {
+		return fmt.Errorf("ddns: auth provider %s is invalid, empty acceessKey & secret", f.SSHSecrurityGroup.Provider)
+	}
 	client, err := ecs.NewClientWithAccessKey(
-		auth.Region,
-		auth.AccessKeyID,
-		auth.AccessKeySecret,
+		f.SSHSecrurityGroup.Region,
+		auth.Spec.AccessKey,
+		auth.Spec.AccessSecret,
 	)
 	if err != nil {
 		return err

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	v1 "github.com/aoxn/meridian/api/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
 )
 
@@ -16,7 +18,7 @@ type New func(config Config) (Cloud, error)
 
 var cloud = map[string]New{}
 
-func NewCloud(
+func NewCloudBy(
 	pv v1.Provider,
 ) (Cloud, error) {
 	pdFunc, err := Get(pv.Spec.Type)
@@ -24,6 +26,21 @@ func NewCloud(
 		return nil, err
 	}
 	return pdFunc(Config{AuthInfo: pv.Spec.AuthInfo})
+}
+
+func NewCloud(
+	r client.Client,
+	pvd string,
+) (Cloud, error) {
+	if pvd == "" {
+		return nil, fmt.Errorf("empty provider specified")
+	}
+	var pv v1.Provider
+	err := r.Get(context.TODO(), client.ObjectKey{Name: pvd}, &pv)
+	if err != nil {
+		return nil, err
+	}
+	return NewCloudBy(pv)
 }
 
 func Get(name string) (New, error) {
@@ -129,6 +146,7 @@ type ISecurityGroup interface {
 }
 
 type IInstance interface {
+	GetInstanceId(node *corev1.Node) string
 	FindInstance(ctx context.Context, id Id) (InstanceModel, error)
 	ListInstance(ctx context.Context, i Id) ([]InstanceModel, error)
 	CreateInstance(ctx context.Context, i InstanceModel) (string, error)

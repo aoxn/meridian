@@ -15,38 +15,29 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func init() {
-	Add(MyIP, NewMyIP())
-	Add(UPNP, NewUPNP())
-	Add(IPIFY, NewIPify())
-	Add(POLL, NewPOLL())
-}
-
 type Resolver interface {
 	Name() string
 	GetAddr() (*Addr, error)
 }
 
-func GetAddress(name string) (*Addr, error) {
-	resolver := FindBy(name)
-	if resolver == nil {
-		return nil, fmt.Errorf("no address provider found by name: %s", name)
+func GetAddress(name ...string) (*Addr, error) {
+	if len(name) > 0 {
+		for _, v := range name {
+			switch v {
+			case UPNP:
+				return NewUPNP().GetAddr()
+			case MyIP:
+				return NewMyIP().GetAddr()
+			case IPIFY:
+				return NewMyIP().GetAddr()
+			case POLL:
+				return NewPOLL().GetAddr()
+			default:
+				return NewRoundRobin().GetAddr()
+			}
+		}
 	}
-	return resolver.GetAddr()
-}
-
-var addrs = map[string]Resolver{}
-
-func Add(name string, prvd Resolver) { addrs[name] = prvd }
-
-func FindBy(name string) Resolver { return addrs[name] }
-
-func Supported() []string {
-	var plugins []string
-	for k, _ := range addrs {
-		plugins = append(plugins, k)
-	}
-	return plugins
+	return NewRoundRobin().GetAddr()
 }
 
 type Addr struct {
@@ -77,7 +68,37 @@ const (
 	IPIFY = "ipify"
 	STUN  = "stun"
 	POLL  = "poll"
+
+	Round = "round"
 )
+
+func NewRoundRobin() Resolver {
+	return &roundRobin{
+		under: []Resolver{
+			NewUPNP(),
+			NewPOLL(),
+			NewIPify(),
+			NewMyIP(),
+		},
+	}
+}
+
+type roundRobin struct {
+	under []Resolver
+}
+
+func (i *roundRobin) Name() string { return Round }
+
+func (i *roundRobin) GetAddr() (*Addr, error) {
+	for _, r := range i.under {
+		addr, err := r.GetAddr()
+		if err == nil {
+			return addr, nil
+		}
+		klog.Infof("poll gateway address from[%s] error: %s", r.Name(), err.Error())
+	}
+	return nil, fmt.Errorf("no address found for %s", i.Name())
+}
 
 func NewUPNP() Resolver {
 	return &upnp{}
