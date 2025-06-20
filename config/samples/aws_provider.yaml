@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Provider
+metadata:
+  name: aws-provider
+  namespace: default
+spec:
+  type: aws
+  authInfo:
+    region: us-west-2
+    accessKey: "your-access-key-id"
+    accessSecret: "your-secret-access-key"
+    # Alternatively, you can use IAM roles and omit credentials
+    # The provider will use the default credential chain
+---
+apiVersion: v1
+kind: Cluster
+metadata:
+  name: aws-cluster
+  namespace: default
+spec:
+  provider: aws-provider
+  region: us-west-2
+  vpc:
+    cidr: "10.0.0.0/16"
+    vpcName: "meridian-vpc"
+  subnets:
+    - zoneId: "us-west-2a"
+      cidrBlock: "10.0.1.0/24"
+      vswitchName: "meridian-subnet-1"
+    - zoneId: "us-west-2b"
+      cidrBlock: "10.0.2.0/24"
+      vswitchName: "meridian-subnet-2"
+  securityGroups:
+    - securityGroupName: "meridian-sg"
+      description: "Security group for Meridian cluster"
+  nodeGroups:
+    - name: "worker-nodes"
+      minSize: 1
+      maxSize: 5
+      desiredCapacity: 2
+      instanceTypes: ["t3.medium", "t3.large"]
+      amiId: "ami-12345678"  # Amazon Linux 2 AMI
+      keyName: "meridian-key"
+      volumeSize: 20
+      volumeType: "gp3"
+      iamInstanceProfile: "meridian-node-role"
+      tags:
+        kubernetes.io/cluster/meridian: "owned"
+        kubernetes.io/role/node: "true"
+  loadBalancers:
+    - name: "meridian-alb"
+      type: "application"
+      scheme: "internet-facing"
+      subnets: ["subnet-12345678", "subnet-87654321"]
+      securityGroups: ["sg-12345678"]
+      listeners:
+        - port: 80
+          protocol: "HTTP"
+          defaultActions:
+            - type: "forward"
+              targetGroupArn: "arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/meridian-tg/1234567890123456"
+  tags:
+    Environment: "production"
+    Project: "meridian"
+    Owner: "devops-team" 

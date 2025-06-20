@@ -41,6 +41,7 @@ type ScalingGroupModel struct {
 	ScalingGroupName string         `json:"scalingGroupName,omitempty"`
 	Min              int            `json:"min,omitempty"`
 	Max              int            `json:"max,omitempty"`
+	DesiredCapacity  int            `json:"desiredCapacity,omitempty"`
 	ScalingConfig    ScalingConfig  `json:"scalingConfig,omitempty"`
 	ScalingRule      ScalingRule    `json:"scalingRule,omitempty"`
 	Tag              []Tag          `json:"tag,omitempty"`

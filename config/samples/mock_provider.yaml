@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Config
+metadata:
+  name: mock-provider-config
+spec:
+  provider: mock
+  region: mock-region
+  authInfo:
+    # Mock provider doesn't require real credentials
+    accessKeyId: mock-access-key
+    accessKeySecret: mock-secret-key
+  mockConfig:
+    region: mock-region
+    mockDelay: 100ms
+    enableFailures: false
+    failureRate: 0.1
+    mockResources:
+      vpc: 5
+      vswitch: 10
+      eip: 20
+      scalingGroup: 3
+      instance: 15
+      securityGroup: 8
+      loadBalancer: 2
+      iamRole: 5
+      s3Bucket: 3 
