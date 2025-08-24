@@ -258,7 +258,7 @@ func NewConfig(
 ) clientcmdapi.Config {
 	user := "kubernetes-admin"
 	return clientcmdapi.Config{
-		Kind:       "Config",
+		Kind:       "Spec",
 		APIVersion: "v1",
 		Clusters: map[string]*clientcmdapi.Cluster{
 			cid: {
@@ -305,7 +305,7 @@ contexts:
     user: {{ .UserName }}
   name: {{.UserName}}@{{.ClusterName}}
 current-context: {{.UserName}}@{{.ClusterName}}
-kind: Config
+kind: Spec
 preferences: {}
 users:
 - name: {{ .UserName }}

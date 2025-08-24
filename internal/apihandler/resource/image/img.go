@@ -9,7 +9,7 @@ import (
 	"github.com/aoxn/meridian/internal/server/service"
 	"github.com/aoxn/meridian/internal/server/service/universal"
 	"github.com/aoxn/meridian/internal/tool"
-	"github.com/aoxn/meridian/internal/vma/model"
+	"github.com/aoxn/meridian/internal/vmm/model"
 	"k8s.io/apimachinery/pkg/api/meta"
 	u "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"os"

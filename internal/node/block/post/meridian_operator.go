@@ -105,7 +105,7 @@ func signAndCreate(req *api.Request) error {
 		return err
 	}
 	cfg := api.Config{
-		Kind:       "Config",
+		Kind:       "Spec",
 		APIVersion: "v1",
 		AuthInfos: map[string]*api.AuthInfo{
 			req.Spec.Provider.Type: &req.Spec.Provider,

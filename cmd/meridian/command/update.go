@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/aoxn/meridian"
 	v1 "github.com/aoxn/meridian/api/v1"
-	user "github.com/aoxn/meridian/internal/client"
+	user "github.com/aoxn/meridian/client"
 	"github.com/spf13/cobra"
 	u "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"

@@ -6,7 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/aoxn/meridian"
-	"github.com/aoxn/meridian/internal/client/rest"
+	user "github.com/aoxn/meridian/client"
+	"github.com/aoxn/meridian/client/rest"
 	"github.com/aoxn/meridian/internal/node/block"
 	"github.com/aoxn/meridian/internal/node/block/post/addons"
 	"github.com/aoxn/meridian/internal/tool/sign"
@@ -18,8 +19,6 @@ import (
 	"time"
 
 	v1 "github.com/aoxn/meridian/api/v1"
-	user "github.com/aoxn/meridian/internal/client"
-
 	"github.com/aoxn/meridian/internal/tool"
 	"github.com/pkg/errors"
 

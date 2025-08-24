@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"github.com/aoxn/meridian/client"
 	"github.com/aoxn/meridian/internal/node/block/post/addons"
 	"github.com/aoxn/meridian/internal/tool/cmd"
 	"github.com/aoxn/meridian/internal/tool/sign"
@@ -22,12 +23,11 @@ import (
 	"time"
 
 	v1 "github.com/aoxn/meridian/api/v1"
-	"github.com/aoxn/meridian/internal/client"
 	w "github.com/aoxn/meridian/internal/meridian/worker"
 	"github.com/aoxn/meridian/internal/server/service"
 	"github.com/aoxn/meridian/internal/server/service/universal"
 	"github.com/aoxn/meridian/internal/tool"
-	"github.com/aoxn/meridian/internal/vma/model"
+	"github.com/aoxn/meridian/internal/vmm/model"
 	"github.com/samber/lo"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -657,7 +657,7 @@ func getAddress(addrs []string) string {
 func (m *virtualMachine) EnsureKubernetesContext(vm *v1.VirtualMachine) error {
 	root := vm.Spec.Request.Config.TLS["root"]
 	if root == nil {
-		klog.Warningf("unexpected root tls config: vm.Spec.Request.Config.TLS")
+		klog.Warningf("unexpected root tls config: vm.Spec.Request.Spec.TLS")
 		return nil
 	}
 	addr := getAddress(vm.Status.Address)

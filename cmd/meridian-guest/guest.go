@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/aoxn/meridian"
-	"github.com/aoxn/meridian/internal/vma/guest"
+	"github.com/aoxn/meridian/internal/vmm/guest"
 	"github.com/spf13/cobra"
 	"os"
 )

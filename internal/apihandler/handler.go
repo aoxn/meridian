@@ -11,7 +11,7 @@ import (
 	"github.com/aoxn/meridian/internal/server/service"
 	"github.com/aoxn/meridian/internal/server/service/universal"
 	"github.com/aoxn/meridian/internal/tool/cmd"
-	"github.com/aoxn/meridian/internal/vma/download"
+	"github.com/aoxn/meridian/internal/vmm/download"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"

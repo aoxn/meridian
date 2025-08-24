@@ -428,7 +428,7 @@ func loadRESTClientConfig(kubeconfig string) (*restclient.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Flatten the loaded data to a particular restclient.Config based on the current context.
+	// Flatten the loaded data to a particular restclient.Spec based on the current context.
 	return clientcmd.NewNonInteractiveClientConfig(
 		*loadedConfig,
 		loadedConfig.CurrentContext,

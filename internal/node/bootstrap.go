@@ -44,7 +44,7 @@ func newBootstrapCfg(apiserver, token string) clientcmdapi.Config {
 	)
 
 	return clientcmdapi.Config{
-		Kind:       "Config",
+		Kind:       "Spec",
 		APIVersion: "v1",
 		Clusters: map[string]*clientcmdapi.Cluster{
 			cluster: {

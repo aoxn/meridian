@@ -3,12 +3,12 @@ package command
 import (
 	"context"
 	"fmt"
+	user "github.com/aoxn/meridian/client"
 	"os"
 	"strings"
 
 	"github.com/aoxn/meridian"
 	api "github.com/aoxn/meridian/api/v1"
-	user "github.com/aoxn/meridian/internal/client"
 	"github.com/aoxn/meridian/internal/node/block/post/addons"
 	"github.com/aoxn/meridian/internal/tool/kubeclient"
 	"github.com/ghodss/yaml"

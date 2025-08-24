@@ -3,7 +3,7 @@ package local
 import (
 	"context"
 	"fmt"
-	"github.com/aoxn/meridian/internal/vma/model"
+	"github.com/aoxn/meridian/internal/vmm/model"
 	"os"
 	"path/filepath"
 	"reflect"

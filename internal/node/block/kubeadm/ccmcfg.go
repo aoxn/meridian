@@ -21,7 +21,7 @@ import (
 )
 
 var defaultTpl = `
-kind: Config
+kind: Spec
 contexts:
 - context:
     cluster: kubernetes

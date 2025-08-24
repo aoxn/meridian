@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/aoxn/meridian"
 	v1 "github.com/aoxn/meridian/api/v1"
-	hostagent "github.com/aoxn/meridian/internal/vma/host"
+	hostagent "github.com/aoxn/meridian/internal/vmm/host"
 	"github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
 	"io"
