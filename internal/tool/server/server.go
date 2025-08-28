@@ -1,14 +1,17 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"github.com/aoxn/meridian/internal/tool/cmd"
 	"github.com/gorilla/mux"
 	"github.com/mdlayher/vsock"
 	"github.com/pkg/errors"
+	"io"
 	"k8s.io/klog/v2"
 	"net"
 	"net/http"
@@ -150,4 +153,66 @@ func newListener(cfg *Config) (net.Listener, error) {
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 	}
 	return tls.Listen(network, cfg.BindAddr, tlsconfig)
+}
+
+func DecodeBody(body io.ReadCloser, v interface{}) error {
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		return nil
+	}
+	return json.Unmarshal(data, v)
+}
+
+func HttpJson(w http.ResponseWriter, v interface{}) int {
+	var text string
+	code := http.StatusOK
+	switch v.(type) {
+	case error:
+		text = v.(error).Error()
+		code = http.StatusInternalServerError
+	case string:
+		text = v.(string)
+	default:
+		resp, err := json.Marshal(v)
+		if err != nil {
+			text = err.Error()
+			code = http.StatusInternalServerError
+			break
+		}
+		text = string(resp)
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(code)
+	_, err := io.Copy(w, bytes.NewBuffer([]byte(text)))
+	if err != nil {
+		klog.Errorf("httpJson copy response: %s", err.Error())
+	}
+	return code
+}
+
+func HttpJsonCode(w http.ResponseWriter, v interface{}, code int) int {
+	var text string
+	switch v.(type) {
+	case error:
+		text = v.(error).Error()
+	case string:
+		text = v.(string)
+	default:
+		resp, err := json.Marshal(v)
+		if err != nil {
+			text = err.Error()
+			break
+		}
+		text = string(resp)
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(code)
+	_, err := io.Copy(w, bytes.NewBuffer([]byte(text)))
+	if err != nil {
+		klog.Errorf("httpJsonCode copy response: %s", err.Error())
+	}
+	return code
 }

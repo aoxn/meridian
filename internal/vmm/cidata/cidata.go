@@ -213,7 +213,7 @@ func writeISO(isoPath, label string, layout []entry) error {
 		if f.closer != nil {
 			_ = f.closer.Close()
 		}
-		klog.V(6).Infof("debug: write iso part, %s", f.path)
+		klog.V(6).Infof("debug generate cloud-init disk: write iso part, %s", f.path)
 	}
 
 	finalizeOptions := iso9660.FinalizeOptions{

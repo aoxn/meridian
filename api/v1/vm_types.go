@@ -30,7 +30,6 @@ import (
 
 // VirtualMachineSpec defines the desired state of GuestInfo
 type VirtualMachineSpec struct {
-	Request         RequestSpec       `json:"request"`
 	GUI             bool              `yaml:"gui" json:"gui"`
 	VMType          VMType            `yaml:"vmType,omitempty" json:"vmType,omitempty"`
 	OS              OS                `yaml:"os,omitempty" json:"os,omitempty"`
@@ -58,21 +57,36 @@ type VirtualMachineSpec struct {
 	TimeZone        string            `yaml:"timezone,omitempty" json:"timezone,omitempty"`
 }
 
-func (s *VirtualMachineSpec) SetPortForward(p PortForward) {
-	SetPortForward(s.PortForwards, p)
-}
-
-func SetPortForward(forwards []PortForward, p PortForward) {
-	found := false
-	for i := range forwards {
-		if forwards[i].Source == p.Source {
-			found = true
-			forwards[i] = p
+func (s *VirtualMachineSpec) SetForward(ports ...PortForward) {
+	for _, port := range ports {
+		found := false
+		for i := range s.PortForwards {
+			if s.PortForwards[i].Rule() == port.Rule() {
+				found = true
+				s.PortForwards[i] = port
+			}
+		}
+		if !found {
+			s.PortForwards = append(s.PortForwards, port)
 		}
 	}
-	if !found {
-		forwards = append(forwards, p)
+}
+
+func (s *VirtualMachineSpec) RemoveForward(ports ...PortForward) {
+	var forward []PortForward
+	for _, v := range s.PortForwards {
+		found := false
+		for _, port := range ports {
+			if v.Rule() == port.Rule() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			forward = append(forward, v)
+		}
 	}
+	s.PortForwards = forward
 }
 
 func (s *VirtualMachineSpec) SetMounts(p Mount) {
@@ -112,15 +126,6 @@ type VirtualMachine struct {
 
 	Spec   VirtualMachineSpec   `json:"spec,omitempty"`
 	Status VirtualMachineStatus `json:"status,omitempty"`
-}
-
-func (t *VirtualMachine) GetDockerEndpoint() string {
-	for _, p := range t.Spec.PortForwards {
-		if strings.Contains(p.Source, "docker.sock") {
-			return p.Source
-		}
-	}
-	return ""
 }
 
 // VirtualMachineStatus defines the observed state of GuestInfo

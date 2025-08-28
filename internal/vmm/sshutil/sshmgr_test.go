@@ -1,6 +1,7 @@
 package sshutil
 
 import (
+	"github.com/aoxn/meridian/internal/vmm/meta"
 	"testing"
 )
 
@@ -10,8 +11,8 @@ ls -lhtr /
 `
 
 func TestSSHMgr(t *testing.T) {
-	mgr := NewSSHMgr("abc", "192.168.64.71:22", 22)
-	out, err := mgr.RunCommand(cmd)
+	mgr := NewSSHMgr("192.168.64.2", meta.Local.Config().Dir())
+	out, err := mgr.RunCommand("abc", cmd)
 	if err != nil {
 		t.Fatalf("build command: %s", err)
 	}

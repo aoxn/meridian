@@ -583,7 +583,7 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 	if localPath == "" {
 		return fmt.Errorf("downloadHTTP: got empty localPath")
 	}
-	klog.Infof("downloading %q into %q", url, localPath)
+	klog.V(5).Infof("downloading: [%q] -> [%q]", url, localPath)
 	localPathTmp := localPath + ".tmp"
 	if err := os.RemoveAll(localPathTmp); err != nil {
 		return err
@@ -663,3 +663,52 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 	}
 	return os.Rename(localPathTmp, localPath)
 }
+
+//
+//// downloadRestoreImage resumable downloads macOS restore image (ipsw) file.
+//func downloadRestoreImage(ctx context.Context, url string, destPath string) (*progress.Reader, error) {
+//	// open or create
+//	f, err := os.OpenFile(destPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	fileInfo, err := f.Stat()
+//	if err != nil {
+//		f.Close()
+//		return nil, err
+//	}
+//
+//	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+//	if err != nil {
+//		f.Close()
+//		return nil, err
+//	}
+//
+//	// Content-Range Accept-Ranges: bytes
+//	req.Header.Add("User-Agent", "github.com/Code-Hex/vz")
+//	req.Header.Add("Range", fmt.Sprintf("bytes=%d-", fileInfo.Size()))
+//
+//	resp, err := http.DefaultClient.Do(req)
+//	if err != nil {
+//		f.Close()
+//		return nil, err
+//	}
+//
+//	if 200 > resp.StatusCode || resp.StatusCode >= 300 {
+//		f.Close()
+//		resp.Body.Close()
+//		return nil, fmt.Errorf("unexpected http status code: %d", resp.StatusCode)
+//	}
+//
+//	reader := progress.NewReader(resp.Body, resp.ContentLength, fileInfo.Size())
+//
+//	go func() {
+//		defer f.Close()
+//		defer resp.Body.Close()
+//		_, err := io.Copy(f, reader)
+//		reader.Finish(err)
+//	}()
+//
+//	return reader, nil
+//}

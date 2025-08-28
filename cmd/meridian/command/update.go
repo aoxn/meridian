@@ -37,7 +37,7 @@ func updater(r string, args []string) error {
 	o.SetGroupVersionKind(gvk(r))
 	switch r {
 	case VirtualMachine:
-		return resource.Update(context.TODO(), &o)
+		return resource.Update(context.TODO(), "", args[0], &o)
 	default:
 	}
 	return fmt.Errorf("unimplemented resource: %s", r)

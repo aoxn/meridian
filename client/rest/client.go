@@ -79,7 +79,7 @@ func NewRESTClient(
 	return &RESTClient{
 		ContentType:      contentType,
 		base:             &base,
-		versionedAPIPath: "nil",
+		versionedAPIPath: "",
 		//Throttle:         throttle,
 		Client: client,
 	}, nil
@@ -136,5 +136,5 @@ func (c *RESTClient) Delete() *Request {
 
 // APIVersion returns the APIVersion this RESTClient is expected to use.
 func (c *RESTClient) APIVersion() string {
-	return "nilversion"
+	return "v1"
 }

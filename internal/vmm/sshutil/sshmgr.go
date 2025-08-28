@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/aoxn/meridian/api/v1"
-	"github.com/aoxn/meridian/internal/vmm/meta"
 	"github.com/coreos/go-semver/semver"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/cpu"
@@ -25,19 +24,19 @@ import (
 	sshk "golang.org/x/crypto/ssh"
 )
 
-func NewSSHMgr(inst, addr string, port int) *SSHMgr {
+func NewSSHMgr(addr string, dir string) *SSHMgr {
+
 	return &SSHMgr{
-		vmName:  inst,
-		port:    port,
+		port:    22,
 		address: addr,
+		cfgDir:  dir,
 	}
 }
 
 type SSHMgr struct {
 	port    int
 	address string
-	vmName  string
-	metaCfg *meta.Config
+	cfgDir  string
 	config  *sshc.SSHConfig
 }
 
@@ -57,9 +56,8 @@ func (ssh *SSHMgr) SetAddr(addr string) {
 	ssh.address = addr
 }
 
-func (ssh *SSHMgr) RunCommand(cmd string) (string, error) {
-	configDir := ssh.metaCfg.Dir()
-	data, err := os.ReadFile(filepath.Join(configDir, v1.UserPrivateKey))
+func (ssh *SSHMgr) RunCommand(vmName, cmd string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(ssh.cfgDir, v1.UserPrivateKey))
 	if err != nil {
 		return "", err
 	}
@@ -68,29 +66,33 @@ func (ssh *SSHMgr) RunCommand(cmd string) (string, error) {
 		return "", err
 	}
 	config := &sshk.ClientConfig{
-		User: ssh.vmName,
+		User: vmName,
 		Auth: []sshk.AuthMethod{
 			sshk.PublicKeys(signer),
 		},
 		HostKeyCallback: sshk.InsecureIgnoreHostKey(),
 	}
-	klog.Infof("debug ssh %s@%s %s", ssh.vmName, ssh.address, cmd)
+	klog.Infof("debug ssh %s@%s %s", vmName, ssh.address, cmd)
 
-	client, err := sshk.Dial("tcp", ssh.address, config)
+	client, err := sshk.Dial("tcp", fmt.Sprintf("%s:%d", ssh.address, ssh.port), config)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to connect to %s", ssh.address)
 	}
+
 	defer client.Close()
 	session, err := client.NewSession()
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to create session")
 	}
+
 	defer session.Close()
 	var b bytes.Buffer
 	session.Stdout = &b
 	if err := session.Run(cmd); err != nil {
-		return "", errors.Wrapf(err, "failed to run %s", cmd)
+		klog.Infof("failed to run command, with output: %s: %s", err.Error(), b.String())
+		return "", errors.Wrapf(err, "failed to run command")
 	}
+
 	return b.String(), nil
 }
 
@@ -141,7 +143,7 @@ func (ssh *SSHMgr) WriteSSHConfigFile(name, instDir string) error {
 // an identity explicitly.
 func (ssh *SSHMgr) LoadPubKey() ([]PubKey, error) {
 	var pubkeys []PubKey
-	configDir := ssh.metaCfg.Dir()
+	configDir := ssh.cfgDir
 	_, err := os.Stat(filepath.Join(configDir, v1.UserPrivateKey))
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -230,7 +232,7 @@ func readPublicKey(f string) (PubKey, error) {
 // The result always contains the IdentityFile option.
 // The result never contains the Port option.
 func (ssh *SSHMgr) CommonOpts(useDotSSH bool) ([]string, error) {
-	configDir := ssh.metaCfg.Dir()
+	configDir := ssh.cfgDir
 	privateKeyPath := filepath.Join(configDir, v1.UserPrivateKey)
 	_, err := os.Stat(privateKeyPath)
 	if err != nil {

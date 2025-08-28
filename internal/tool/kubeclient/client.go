@@ -54,7 +54,9 @@ func (kc *KubeClient) initClient() error {
 				break
 			}
 		}
-		request = &kc.vm.Spec.Request
+		// todo: 需要实例化
+		//request = &kc.vm.Spec.Request
+		request = &api.RequestSpec{}
 	case "host":
 		request = &kc.request.Spec
 		klog.Infof("build local kubernetes client config")

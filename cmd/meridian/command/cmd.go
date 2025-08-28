@@ -15,11 +15,11 @@ import (
 )
 
 const HelpLong = `
-## Create a kubernetes cluster with ROS provider
-## Get cluster list
-## Get cluster specification
-## Watch the cluster creation process
-## Delete cluster created by wdrip with ROS provider
+## m get vm 
+## m create vm aoxn
+## m start vm aoxn
+## m delete vm aoxn
+## m run vm aoxn
 `
 
 func NewCommandVersion() *cobra.Command {
@@ -35,13 +35,15 @@ func NewCommandVersion() *cobra.Command {
 	return cmd
 }
 
-type cmdflag struct {
+type createflag struct {
 	config      string
 	cpus        int
 	mems        string
 	image       string
 	arch        string
 	recoverMode bool
+
+	in string
 
 	withNodeGroups bool
 	withKubernetes bool
@@ -55,9 +57,11 @@ const (
 	MasterSetResource  = "masterset"
 	TaskResource       = "task"
 	ImageResource      = "image"
+	ImagesResource     = "images"
 	AddonResource      = "addon"
 	KubeconfigResource = "kubeconfig"
 	RequestResource    = "request"
+	DockerResource     = "docker"
 )
 
 func transformResource(resource string) string {

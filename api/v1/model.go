@@ -1,7 +1,9 @@
 package v1
 
 import (
+	"fmt"
 	"github.com/opencontainers/go-digest"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 type (
@@ -44,11 +46,12 @@ type BaseLine struct {
 }
 
 type File struct {
-	Name     string        `yaml:"name" json:"name"`
-	Location string        `yaml:"location" json:"location"` // REQUIRED
-	OS       string        `yaml:"os" json:"os"`
-	Arch     Arch          `yaml:"arch,omitempty" json:"arch,omitempty"`
-	Digest   digest.Digest `yaml:"digest,omitempty" json:"digest,omitempty"`
+	Name     string            `yaml:"name" json:"name"`
+	Location string            `yaml:"location" json:"location"` // REQUIRED
+	OS       string            `yaml:"os" json:"os"`
+	Arch     Arch              `yaml:"arch,omitempty" json:"arch,omitempty"`
+	Digest   digest.Digest     `yaml:"digest,omitempty" json:"digest,omitempty"`
+	Labels   map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
 }
 
 type FileWithVMType struct {
@@ -124,10 +127,14 @@ const (
 )
 
 type PortForward struct {
-	Source      string `yaml:"source" json:"source"`
-	Destination string `yaml:"destination" json:"destination"`
-	Proto       string `yaml:"proto" json:"proto"`
-	VSockPort   int    `yaml:"vsockPort,omitempty" json:"vsockPort,omitempty"`
+	SrcProto string             `yaml:"srcProto" json:"srcProto"`
+	SrcAddr  intstr.IntOrString `yaml:"srcAddr" json:"srcAddr"`
+	DstProto string             `yaml:"dstProto" json:"dstProto"`
+	DstAddr  intstr.IntOrString `yaml:"dstAddr,omitempty" json:"dstAddr,omitempty"`
+}
+
+func (p *PortForward) Rule() string {
+	return fmt.Sprintf("%s://%s->%s://%v", p.SrcProto, p.SrcAddr.String(), p.DstProto, p.DstAddr.String())
 }
 
 type Network struct {

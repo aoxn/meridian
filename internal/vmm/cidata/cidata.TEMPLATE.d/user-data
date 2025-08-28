@@ -15,7 +15,7 @@ users:
     homedir: "{{.Home}}"
     shell: /bin/bash
     sudo: ALL=(ALL) NOPASSWD:ALL
-    lock_passwd: true
+    lock_passwd: false
 #    plain_text_passwd: 123456
     ssh_authorized_keys:
     {{- range $val := .SSHPubKeys }}

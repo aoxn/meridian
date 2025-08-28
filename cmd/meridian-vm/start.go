@@ -5,8 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/aoxn/meridian"
-	v1 "github.com/aoxn/meridian/api/v1"
 	hostagent "github.com/aoxn/meridian/internal/vmm/host"
+	"github.com/aoxn/meridian/internal/vmm/meta"
 	"github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
 	"io"
@@ -24,22 +24,22 @@ func Start(args []string, cfgfile string) error {
 	var (
 		data []byte
 		err  error
-		vm   = &v1.VirtualMachine{}
+		vm   = &meta.Machine{}
 	)
 	klog.Infof("start vm with cfg: [%s]", cfgfile)
 	if cfgfile != "" {
 		data, err = os.ReadFile(cfgfile)
 	} else {
 		data, err = io.ReadAll(os.Stdin)
+		err = yaml.Unmarshal(data, vm)
+		if err != nil {
+			return err
+		}
 	}
 	if err != nil {
 		return err
 	}
 	klog.Infof("start vm with data: [%s]", string(data))
-	err = yaml.Unmarshal(data, vm)
-	if err != nil {
-		return err
-	}
 	if vm.Name == "" {
 		return fmt.Errorf("vm name is required")
 	}

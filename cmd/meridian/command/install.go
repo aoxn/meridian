@@ -118,13 +118,14 @@ func installAddon(r string, args []string) error {
 	var (
 		vm = api.EmptyVM(forVm)
 	)
-	err = client.Get(context.TODO(), vm)
+	err = client.Get(context.TODO(), "vm", vm.Name, vm)
 	if err != nil {
 		return errors.Wrapf(err, "get vm failed")
 	}
-	vm.Spec.Request.Config.SetAddon(&addon)
+	var req api.RequestSpec
+	req.Config.SetAddon(&addon)
 	yml, err := addons.RenderAddon(addonName, &addons.RenderData{
-		R: api.NewEmptyRequest(vm.Name, vm.Spec.Request), NodeGroup: forNodeGroup,
+		R: api.NewEmptyRequest(vm.Name, req), NodeGroup: forNodeGroup,
 	})
 	if err != nil {
 		return errors.Wrapf(err, "get addon failed")
@@ -145,5 +146,5 @@ func saveVmConfig(vm *api.VirtualMachine) error {
 	if err != nil {
 		return errors.Wrapf(err, "service client failed")
 	}
-	return resource.Update(context.TODO(), vm)
+	return resource.Update(context.TODO(), "vm", vm.Name, vm)
 }

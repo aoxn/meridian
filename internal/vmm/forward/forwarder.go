@@ -13,11 +13,13 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 )
 
 //type Dialer func(network, addr string) (c net.Conn, err error)
 
 type Forwarder interface {
+	Rule() string
 	Stop()
 	BindAddr() string
 	Forward() error
@@ -44,12 +46,20 @@ func (mgr *ForwardMgr) AddBy(rule string, dialer ...dialer.Dialer) error {
 func (mgr *ForwardMgr) Add(fwd Forwarder) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-	f, ok := mgr.fwd[fwd.BindAddr()]
+	f, ok := mgr.fwd[fwd.Rule()]
 	if ok {
+		klog.Warningf("duplicated forward rule: %s", fwd.BindAddr())
 		f.Stop()
-		delete(mgr.fwd, fwd.BindAddr())
+		delete(mgr.fwd, fwd.Rule())
 	}
-	mgr.fwd[fwd.BindAddr()] = fwd
+	mgr.fwd[fwd.Rule()] = fwd
+	go func() {
+		err := fwd.Forward()
+		if err == nil {
+			return
+		}
+		klog.Errorf("request forwarder: %s", err)
+	}()
 }
 
 func (mgr *ForwardMgr) Remove(key string) {
@@ -74,14 +84,6 @@ func (mgr *ForwardMgr) String() string {
 	return fmt.Sprintf("total[%d] forward rule: %s", len(fwds), fwds)
 }
 
-func (mgr *ForwardMgr) Stop() {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-	for _, fwd := range mgr.fwd {
-		fwd.Stop()
-	}
-}
-
 func NewForwarderBy(rule string, dialer ...dialer.Dialer) (Forwarder, error) {
 	block := strings.Split(rule, "->")
 	if len(block) != 2 {
@@ -94,12 +96,13 @@ func NewForwarderBy(rule string, dialer ...dialer.Dialer) (Forwarder, error) {
 		return nil, fmt.Errorf("invalid address rule: %s", rule)
 	}
 	klog.Infof("add forwarding rule: %s %s -> %s %s", addrFrom[0], addrFrom[1], addrTo[0], addrTo[1])
-	return NewForward(addrFrom[0], addrFrom[1], addrTo[0], addrTo[1], dialer...)
+	return NewForward(rule, addrFrom[0], addrFrom[1], addrTo[0], addrTo[1], dialer...)
 }
 
-func NewForward(bindNetwork, bindAddr, forwardNetwork, forwardAddr string, dialer ...dialer.Dialer) (Forwarder, error) {
+func NewForward(rule string, bindNetwork, bindAddr, forwardNetwork, forwardAddr string, dialer ...dialer.Dialer) (Forwarder, error) {
 	fwd := &forwarder{
-		quit: make(chan struct{}),
+		rule: rule,
+		quit: make(chan struct{}, 10),
 		bindAt: &addr{
 			network: bindNetwork,
 			address: bindAddr,
@@ -110,23 +113,18 @@ func NewForward(bindNetwork, bindAddr, forwardNetwork, forwardAddr string, diale
 		},
 		remoteDialer: addrDialer{},
 	}
-	if (forwardNetwork == "" || forwardNetwork == "virtio") && len(dialer) == 0 {
+	if (forwardNetwork == "" || forwardNetwork == "vsock") && len(dialer) == 0 {
 		return nil, fmt.Errorf("virtio need dialer")
 	}
-	if dialer != nil || len(dialer) != 0 {
+	if dialer != nil && len(dialer) != 0 {
 		fwd.remoteDialer = dialer[0]
 	}
-	go func() {
-		err := fwd.Forward()
-		if err == nil {
-			return
-		}
-		klog.Errorf("request forwarder: %s", err)
-	}()
 	return fwd, nil
 }
 
 type forwarder struct {
+	rule string
+
 	quit chan struct{}
 
 	lt net.Listener
@@ -177,11 +175,15 @@ func intPort(sp string) uint32 {
 func (p *forwarder) Stop() {
 	_ = p.lt.Close()
 	klog.Infof("stop forwarder: %s", p.bindAt)
-	p.quit <- struct{}{}
+	close(p.quit)
 	if p.bindAt.network != "unix" {
 		return
 	}
 	_ = os.Remove(p.bindAt.address)
+}
+
+func (p *forwarder) Rule() string {
+	return p.rule
 }
 
 func (p *forwarder) BindAddr() string {
@@ -193,9 +195,16 @@ func (p *forwarder) Forward() error {
 	if err != nil {
 		return errors.Wrapf(err, "bind listener, %s: %v", p.bindAt, err)
 	}
+	klog.Infof("forwarder listen at: %s", p.bindAt)
 	for {
+		select {
+		case <-p.quit:
+			return fmt.Errorf("actively quit forwarder %s", p.bindAt)
+		default:
+		}
 		conn, err := p.lt.Accept()
 		if err != nil {
+			time.Sleep(15 * time.Second)
 			klog.Warningf("forwarder: accepting connection [addr %s] with %s", p.bindAt, err)
 			continue
 		}
@@ -203,6 +212,7 @@ func (p *forwarder) Forward() error {
 		forwardConn, err := p.remoteDialer.Dial(p.forwardTo.network, p.forwardTo.address)
 		if err != nil {
 			_ = conn.Close()
+			time.Sleep(15 * time.Second)
 			klog.Warningf("forwarder: dialing connection [addr %s] with %s", p.forwardTo, err)
 			continue
 		}

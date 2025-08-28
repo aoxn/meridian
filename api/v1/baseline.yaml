@@ -22,11 +22,15 @@ images:
   - name: "ubuntu24.04.x86_64"
     arch: "x86_64"
     os: "linux"
+    labels:
+      gui: "false"
     digest: "sha256:dd8b691b3f0d1e61f01ae0d857dcb3088d1d8bf4148439bd07abc081e4fc31f8"
     location: "https://cloud-images.ubuntu.com/releases/24.04/release-20240809/ubuntu-24.04-server-cloudimg-amd64.img"
   - name: "ubuntu24.04.arm64"
     arch: "aarch64"
     os: "linux"
+    labels:
+      gui: "false"
     digest: "sha256:2e0c90562af1970ffff220a5073a7830f4acc2aad55b31593003e8c363381e7a"
     location: "https://cloud-images.ubuntu.com/releases/24.04/release-20240809/ubuntu-24.04-server-cloudimg-arm64.img"
 guestBin:

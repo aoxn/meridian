@@ -1,19 +1,13 @@
 package command
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/aoxn/meridian"
 	api "github.com/aoxn/meridian/api/v1"
-	"github.com/aoxn/meridian/internal/vmm/download"
-	"github.com/aoxn/meridian/internal/vmm/model"
+	"github.com/aoxn/meridian/internal/vmm/meta"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-	"os"
-	"path/filepath"
-	"runtime"
 )
 
 // NewCommandPull returns a new cobra.Command for cluster creation
@@ -33,10 +27,13 @@ func NewCommandPull() *cobra.Command {
 				}
 				return nil
 			}
-			if len(args) < 1 {
+			if len(args) < 2 {
 				return fmt.Errorf("image name is needed")
 			}
-			return PullImage(args[0])
+			if args[0] != "image" {
+				return fmt.Errorf("only support [image]")
+			}
+			return PullImage(args[1])
 		},
 	}
 	cmd.PersistentFlags().BoolVarP(&discover, "discover", "d", false, "discover available images")
@@ -44,97 +41,34 @@ func NewCommandPull() *cobra.Command {
 }
 
 func PullImage(name string) error {
+
 	f := api.FindImage(name)
 	if f == nil {
-		return fmt.Errorf("image %s not found", name)
+		return fmt.Errorf("unexpected image name: [%s], use[ m get image -d ] obtain available images", name)
 	}
-	imgDir, err := model.MdImagesDir()
+
+	backend, err := meta.NewLocal()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to load local image repo")
 	}
-	ipath := filepath.Join(imgDir, name)
-	exist, err := api.Exist(ipath)
+	img := meta.Image{
+		Name:     name,
+		Arch:     string(f.Arch),
+		OS:       f.OS,
+		Labels:   f.Labels,
+		Location: f.Location,
+	}
+	err = backend.Image().Pull(&img)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to pull image")
 	}
-	if exist {
-		return fmt.Errorf("image %s already exists", name)
-	}
-	klog.Infof("debug go runtime arch: %q", runtime.GOARCH)
-	_, err = download.DownloadFile(context.TODO(), "", *f, true, "download os images", f.Arch)
-	if err != nil {
-		return err
-	}
-	content, _ := json.MarshalIndent(f, "", "  ")
-	err = os.MkdirAll(ipath, os.ModePerm)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(ipath, "data"), content, os.ModePerm)
+	return backend.Image().Create(&img)
 }
 
-func getImage() (*api.ImageList, error) {
-	imageDir, err := model.MdImagesDir()
+func getImage() ([]*meta.Image, error) {
+	backend, err := meta.NewLocal()
 	if err != nil {
 		return nil, err
 	}
-	var images = &api.ImageList{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ImageList",
-			APIVersion: api.GroupVersion.String(),
-		},
-		ListMeta: metav1.ListMeta{},
-	}
-	archs, err := os.Stat(imageDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return images, nil
-		}
-		return nil, err
-	}
-	if !archs.IsDir() {
-		return nil, fmt.Errorf("%s is not a directory", imageDir)
-	}
-
-	imageRepo, err := os.ReadDir(imageDir)
-	if err != nil {
-		return nil, err
-	}
-	for _, img := range imageRepo {
-		if !img.IsDir() {
-			continue
-		}
-
-		f := filepath.Join(
-			imageDir,
-			img.Name(),
-			"data")
-		data, err := os.ReadFile(f)
-		if err != nil {
-			klog.Infof("failed to read data from %s, %s", f, err)
-			continue
-		}
-		m := &api.File{}
-		err = json.Unmarshal(data, m)
-		if err != nil {
-			klog.Infof("failed to unmarshal data from %s, %s", f, err)
-			continue
-		}
-		image := api.Image{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: img.Name(),
-			},
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Image",
-				APIVersion: api.GroupVersion.String(),
-			},
-			Spec: api.ImageSpec{
-				Name: m.Name,
-				Arch: string(m.Arch),
-				OS:   m.OS,
-			},
-		}
-		images.Items = append(images.Items, image)
-	}
-	return images, nil
+	return backend.Image().List()
 }

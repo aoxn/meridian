@@ -3,13 +3,15 @@ package hostagent
 import (
 	"context"
 	"errors"
-	"github.com/aoxn/meridian/internal/server"
 	"github.com/aoxn/meridian/internal/tool/downloader"
+	"github.com/aoxn/meridian/internal/tool/server"
 	"github.com/aoxn/meridian/internal/vmm/host/connectivity"
 	"github.com/aoxn/meridian/internal/vmm/meta"
+	"github.com/gorilla/mux"
+	gerrors "github.com/pkg/errors"
+	"github.com/samber/lo"
 	"net/http"
 	"path"
-
 	//"errors"
 	"fmt"
 	"github.com/aoxn/meridian/api/v1"
@@ -39,7 +41,6 @@ type HostAgent struct {
 	vmMeta  *meta.Machine
 	ssh     *sshutil.SSHMgr
 	ci      *cidata.CloudInit
-	fwd     *forward.ForwardMgr
 	connect *connectivity.Connectivity
 
 	driver backend.Driver
@@ -87,11 +88,10 @@ func New(vmMeta *meta.Machine, stdout io.Writer, opts ...Opt) (*HostAgent, error
 		return vz.New(base)
 	}
 	driver := newBackend()
-	sshMgr := sshutil.NewSSHMgr(vmMeta.Name, "127.0.0.1", 6022)
+	sshMgr := sshutil.NewSSHMgr("127.0.0.1", meta.Local.Config().Dir())
 	a := &HostAgent{
 		vmMeta:            vmMeta,
 		ci:                cidata.NewCloudInit(vmMeta, sshMgr),
-		fwd:               forward.NewForwardMgr(),
 		connect:           connectivity.NewConnectivity(forward.NewForwardMgr(), driver, vmMeta),
 		ssh:               sshMgr,
 		guestPort:         10443,
@@ -113,9 +113,13 @@ func (ha *HostAgent) Run(ctx context.Context) error {
 	}()
 	vmInfo := ha.vmMeta.Spec
 	go ha.HealthyTick(ctx)
-	err := ha.GenDisk(ctx)
+	err := ha.waitOnDisk()
 	if err != nil {
 		return err
+	}
+	err = ha.EnsureCIISO(ctx)
+	if err != nil {
+		return gerrors.Wrapf(err, "failed to ensure CI ISO")
 	}
 	errCh, err := ha.driver.Start(ctx)
 	if err != nil {
@@ -130,7 +134,7 @@ func (ha *HostAgent) Run(ctx context.Context) error {
 		}
 		ha.ssh.SetAddr(sshAddr)
 	}
-	go ha.Serve(ctx, ha.vmMeta.Name)
+	go ha.Serve(ctx)
 	go ha.connect.SetMappingRoute()
 
 	if vmInfo.Video.Display == "vnc" {
@@ -189,18 +193,32 @@ func (ha *HostAgent) Run(ctx context.Context) error {
 	return ha.startRoutinesAndWait(ctx, errCh)
 }
 
+func (ha *HostAgent) waitOnDisk() error {
+	for i := 0; i < 20; i++ {
+		if ha.vmMeta.StageUtil().Initialized() {
+			return nil
+		}
+		time.Sleep(10 * time.Second)
+	}
+	return fmt.Errorf("wait disk timeout: %ds", 200)
+}
+
 func (ha *HostAgent) GenDisk(ctx context.Context) error {
 	err := ha.driver.CreateDisk(ctx)
 	if err != nil {
 		return err
 	}
-	return ha.ci.GenCIISO()
+	return ha.EnsureCIISO(ctx)
 }
 
 func (ha *HostAgent) EnsureCIISO(ctx context.Context) error {
 	vmInfo := ha.vmMeta.Spec
-	guestBin := filepath.Join(ha.vmMeta.Dir(), v1.GuestBin)
-	if _, err := os.Stat(guestBin); errors.Is(err, os.ErrNotExist) {
+
+	extracted := path.Join(ha.vmMeta.Dir(), "bin")
+
+	if _, err := os.Stat(extracted); os.IsNotExist(err) {
+		guestBin := filepath.Join(ha.vmMeta.Dir(), v1.GuestBin)
+		klog.Infof("guest not found: %s", extracted)
 		f := v1.FindGuestBin(vmInfo.GuestVersion, string(vmInfo.OS), string(vmInfo.Arch))
 		if f == nil {
 			return fmt.Errorf("guest binary %s not found by arch: %s", guestBin, vmInfo.Arch)
@@ -230,9 +248,9 @@ func (ha *HostAgent) startRoutinesAndWait(ctx context.Context, errCh chan error)
 	stBooting := stBase
 	ha.emitEvent(ctx, event.Event{Status: stBooting})
 	go func() {
-		err := ha.connect.Forward(ctx)
+		err := ha.connect.ForwardMachine(ctx, ha.vmMeta)
 		if err != nil {
-			errCh <- err
+			klog.Errorf("failed to forward vm to host agent: %v", err)
 		}
 		stRunning := stBase
 		if haErr := ha.startHostAgentRoutines(ctx); haErr != nil {
@@ -321,36 +339,45 @@ func generatePassword(length int) (string, error) {
 	return password.Generate(length, length/4, 0, false, false)
 }
 
-func (ha *HostAgent) Serve(ctx context.Context, name string) {
-	err := serve(ctx, name)
-	if err != nil {
-		klog.Fatalf("host agent serve: %s", err.Error())
-	}
-}
-
-func serve(ctx context.Context, name string) error {
-
-	sock := fmt.Sprintf("/tmp/guest-%s.sock", name)
+func (ha *HostAgent) Serve(ctx context.Context) {
+	var sock = ha.vmMeta.SandboxSock()
 	_ = os.RemoveAll(sock)
 	var (
 		cfg = &server.Config{
-			Vsock: false, // listen on vsock
-			//BindAddr: ":30443",
+			Vsock:    false,
 			BindAddr: sock,
 		}
 	)
-	klog.Infof("run guest serve: uid=%d", os.Getuid())
+	klog.Infof("serve sandbox: uid=%d, on [%s]", os.Getuid(), sock)
 
-	damon := server.NewOrDie(context.TODO(), cfg, map[string]map[string]server.HandlerFunc{})
+	sandbox := &sandboxHandler{host: ha}
+	damon := server.NewOrDie(
+		context.TODO(), cfg,
+		map[string]map[string]server.HandlerFunc{},
+	)
 	damon.AddRoute(map[string]map[string]server.HandlerFunc{
 		"GET": {
-			"/health": func(contex context.Context, w http.ResponseWriter, r *http.Request) {
+			"/healthz": func(r *http.Request, w http.ResponseWriter) int {
 				data := tool.PrettyJson(v1.Healthy{Status: "ok"})
 				_, _ = w.Write([]byte(data))
+				return http.StatusOK
 			},
 		},
+		"POST": {
+			"/api/v1/forward/{name}": sandbox.Forward,
+		},
+		"DELETE": {
+			"/api/v1/forward/{name}": sandbox.RemoveForward,
+		},
+		"PUT": {
+			"api/v1/vm/stop/{name}": sandbox.StopVm,
+		},
 	})
-	return damon.Start(ctx)
+	err := damon.Start(ctx)
+	if err != nil {
+		klog.Errorf("failed to start the damon: %s", err)
+	}
+	select {}
 }
 
 func (ha *HostAgent) HealthyTick(ctx context.Context) {
@@ -363,4 +390,68 @@ func (ha *HostAgent) HealthyTick(ctx context.Context) {
 			_ = ha.vmMeta.SavePID()
 		}
 	}
+}
+
+type sandboxHandler struct {
+	host *HostAgent
+}
+
+func (sbx *sandboxHandler) Forward(r *http.Request, w http.ResponseWriter) int {
+	name := mux.Vars(r)["name"]
+	switch name {
+	case "":
+		return server.HttpJson(w, fmt.Errorf("unexpected empty name"))
+	default:
+	}
+	klog.Infof("forwarding %s", name)
+	var spec []v1.PortForward
+	err := server.DecodeBody(r.Body, &spec)
+	if err != nil {
+		return server.HttpJson(w, err)
+	}
+	klog.Infof("start forwarding [%s]: %s", name, lo.Map(spec, func(item v1.PortForward, index int) string {
+		return item.Rule()
+	}))
+	err = sbx.host.connect.Forward(r.Context(), spec)
+	if err != nil {
+		return server.HttpJson(w, err)
+	}
+	return server.HttpJson(w, spec)
+}
+
+func (sbx *sandboxHandler) RemoveForward(r *http.Request, w http.ResponseWriter) int {
+	name := mux.Vars(r)["name"]
+	switch name {
+	case "":
+		return server.HttpJson(w, fmt.Errorf("unexpected empty name"))
+	default:
+	}
+	var spec []v1.PortForward
+	err := server.DecodeBody(r.Body, &spec)
+	if err != nil {
+		return server.HttpJson(w, err)
+	}
+	klog.Infof("remove forward entry: %s", lo.Map(spec, func(item v1.PortForward, index int) string {
+		return item.Rule()
+	}))
+	err = sbx.host.connect.Remove(spec)
+	if err != nil {
+		return server.HttpJson(w, err)
+	}
+	return server.HttpJson(w, spec)
+}
+
+func (sbx *sandboxHandler) StopVm(r *http.Request, w http.ResponseWriter) int {
+	name := mux.Vars(r)["name"]
+	switch name {
+	case "":
+		return server.HttpJson(w, fmt.Errorf("unexpected empty name"))
+	default:
+	}
+	klog.Infof("tring to stop vm %s", name)
+	err := sbx.host.driver.Stop(r.Context())
+	if err != nil {
+		return server.HttpJson(w, err)
+	}
+	return server.HttpJson(w, "Accepted")
 }

@@ -3,25 +3,23 @@ package runtime
 import (
 	"context"
 	"fmt"
-	v1 "github.com/aoxn/meridian/api/v1"
 	"github.com/aoxn/meridian/internal/node/block"
 	"github.com/aoxn/meridian/internal/node/block/file"
 	"github.com/aoxn/meridian/internal/node/host"
 	"github.com/aoxn/meridian/internal/tool/cmd"
 	apt "github.com/arduino/go-apt-client"
 	"github.com/pkg/errors"
-	"io/ioutil"
 	"k8s.io/klog/v2"
 	"os"
 )
 
 type containerdBlock struct {
-	req  *v1.Request
-	host host.Host
-	file *file.File
+	registry string
+	host     host.Host
+	file     *file.File
 }
 
-func NewContainerdBlock(req *v1.Request, host host.Host) (block.Block, error) {
+func NewContainerdBlock(host host.Host, version, registry string) (block.Block, error) {
 
 	info := file.PathInfo{
 		InnerAddr: false,
@@ -34,13 +32,13 @@ func NewContainerdBlock(req *v1.Request, host host.Host) (block.Block, error) {
 		return nil, err
 	}
 	return &containerdBlock{
-		req:  req,
-		host: host,
+		host:     host,
+		registry: registry,
 		file: &file.File{
 			Path:    info,
 			Pkg:     file.PKG_CONTAINERD,
 			Ftype:   file.FILE_PKG,
-			Version: req.Spec.Config.Runtime.Version,
+			Version: version,
 		},
 	}, nil
 }
@@ -56,16 +54,16 @@ func (a *containerdBlock) Ensure(ctx context.Context) error {
 		return fmt.Errorf("make /etc/containerd dir: %s", err.Error())
 	}
 	if err = a.file.Ensure(ctx); err != nil {
-		return errors.Wrapf(err, "install containerd runtime: %s", a.req.Name)
+		return errors.Wrapf(err, "install containerd runtime")
 	}
 
-	err = os.WriteFile("/etc/containerd/config.toml", containerdCfg(a.req.Spec.Config.Registry), 0755)
+	err = os.WriteFile("/etc/containerd/config.toml", containerdCfg(a.registry), 0755)
 	if err != nil {
 		return fmt.Errorf("write docker config: %s", err.Error())
 	}
 
 	for f, v := range cfgs {
-		err = ioutil.WriteFile(f, []byte(v), 0755)
+		err = os.WriteFile(f, []byte(v), 0755)
 		if err != nil {
 			return fmt.Errorf("write docker config: %s", err.Error())
 		}

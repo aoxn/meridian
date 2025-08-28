@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	gerrors "github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"k8s.io/klog/v2"
@@ -176,7 +177,12 @@ func (req *Request) Do(api interface{}) error {
 		res  = ""
 		last error
 	)
-	err := wait.ExponentialBackoff(
+	u, err := req.Url()
+	if err != nil {
+		return gerrors.Wrapf(err, "build url")
+	}
+	klog.V(5).Infof("[%s]send request: %s", req.verb, u)
+	err = wait.ExponentialBackoff(
 		wait.Backoff{
 			Duration: 500 * time.Millisecond,
 			Factor:   1,
@@ -200,7 +206,47 @@ func (req *Request) Do(api interface{}) error {
 		}
 		return errors.New(fmt.Sprintf("do request[%s=%s] error(timed out): lastError=%v ", req.verb, req.resource, last))
 	}
+	klog.V(8).Infof("debug request result: %s", res)
+	if len(res) <= 0 {
+		return nil
+	}
 	return req.Decode(res, api)
+}
+
+func (req *Request) DirectDo() error {
+	var (
+		last error
+	)
+	u, err := req.Url()
+	if err != nil {
+		return gerrors.Wrapf(err, "build url")
+	}
+	klog.V(5).Infof("[%s]send request: %s", req.verb, u)
+	err = wait.ExponentialBackoff(
+		wait.Backoff{
+			Duration: 500 * time.Millisecond,
+			Factor:   1,
+			Steps:    1,
+		},
+		func() (bool, error) {
+			_, last = req.send()
+
+			if shouldRetry(last) {
+				return false, nil
+			}
+			if last != nil {
+				return true, last
+			}
+			return true, nil
+		},
+	)
+	if err != nil {
+		if !strings.Contains(err.Error(), timedOut) {
+			return err
+		}
+		return errors.New(fmt.Sprintf("do request[%s=%s] error(timed out): lastError=%v ", req.verb, req.resource, last))
+	}
+	return err
 }
 
 var timedOut = "timed out"
@@ -235,8 +281,8 @@ func (req *Request) send() (string, error) {
 		return "", err
 	}
 
-	if resp.StatusCode != 200 {
-		data, err := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode != 200 && resp.StatusCode != 202 {
+		data, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return "", fmt.Errorf("request code: %d, %s", resp.StatusCode, err.Error())
 		}
@@ -244,7 +290,7 @@ func (req *Request) send() (string, error) {
 	}
 	defer resp.Body.Close()
 
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}

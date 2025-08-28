@@ -492,7 +492,7 @@ func (p *patcher) deleteAndCreate(
 //	// Send the full object to be applied on the server side.
 //	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, info.Object)
 //	if err != nil {
-//		return cmdutil.AddSourceToErr("serverside-apply", info.Source, err)
+//		return cmdutil.AddSourceToErr("serverside-apply", info.SrcAddr, err)
 //	}
 //
 //	options := metav1.PatchOptions{
@@ -519,24 +519,24 @@ func (p *patcher) deleteAndCreate(
 //	// in the patch sent to the server.
 //	modified, err := util.GetModifiedConfiguration(info.Object, true, unstructured.UnstructuredJSONScheme)
 //	if err != nil {
-//		return cmdutil.AddSourceToErr(fmt.Sprintf("retrieving modified configuration from:\n%s\nfor:", info.String()), info.Source, err)
+//		return cmdutil.AddSourceToErr(fmt.Sprintf("retrieving modified configuration from:\n%s\nfor:", info.String()), info.SrcAddr, err)
 //	}
 //
 //	if err := info.Get(); err != nil {
 //		if !errors.IsNotFound(err) {
-//			return cmdutil.AddSourceToErr(fmt.Sprintf("retrieving current configuration of:\n%s\nfrom server for:", info.String()), info.Source, err)
+//			return cmdutil.AddSourceToErr(fmt.Sprintf("retrieving current configuration of:\n%s\nfrom server for:", info.String()), info.SrcAddr, err)
 //		}
 //
 //		// Create the resource if it doesn't exist
 //		// First, update the annotation used by kubectl apply
 //		if err := util.CreateApplyAnnotation(info.Object, unstructured.UnstructuredJSONScheme); err != nil {
-//			return cmdutil.AddSourceToErr("creating", info.Source, err)
+//			return cmdutil.AddSourceToErr("creating", info.SrcAddr, err)
 //		}
 //
 //		// Then create the resource and skip the three-way merge
 //		obj, err := helper.Create(info.Namespace, true, info.Object)
 //		if err != nil {
-//			return cmdutil.AddSourceToErr("creating", info.Source, err)
+//			return cmdutil.AddSourceToErr("creating", info.SrcAddr, err)
 //		}
 //		info.Refresh(obj, true)
 //	}
@@ -556,9 +556,9 @@ func (p *patcher) deleteAndCreate(
 //		if err != nil {
 //			return err
 //		}
-//		patchBytes, patchedObject, err := patcher.Patch(info.Object, modified, info.Source, info.Namespace, info.TagKey, o.ErrOut)
+//		patchBytes, patchedObject, err := patcher.Patch(info.Object, modified, info.SrcAddr, info.Namespace, info.TagKey, o.ErrOut)
 //		if err != nil {
-//			return cmdutil.AddSourceToErr(fmt.Sprintf("applying patch:\n%s\nto:\n%v\nfor:", patchBytes, info), info.Source, err)
+//			return cmdutil.AddSourceToErr(fmt.Sprintf("applying patch:\n%s\nto:\n%v\nfor:", patchBytes, info), info.SrcAddr, err)
 //		}
 //
 //		info.Refresh(patchedObject, true)

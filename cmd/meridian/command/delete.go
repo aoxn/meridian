@@ -5,37 +5,56 @@ import (
 	"fmt"
 	"github.com/aoxn/meridian"
 	user "github.com/aoxn/meridian/client"
-	"github.com/aoxn/meridian/internal/vmm/model"
+	"github.com/aoxn/meridian/internal/vmm/meta"
 	"github.com/spf13/cobra"
-	u "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"os"
-	"path/filepath"
 )
 
 func deleter(r string, args []string) error {
 	if len(args) <= 0 {
 		return fmt.Errorf("id must be provided")
 	}
-	r = transformResource(r)
+	switch r {
+	case ImageResource, ImagesResource:
+		if len(args) < 2 {
+			return fmt.Errorf("id must be provided")
+		}
+		return deleteImage(args[1])
+	case VirtualMachineShot, VirtualMachine:
+		if len(args) < 2 {
+			return fmt.Errorf("id must be provided")
+		}
+		return deleteVm(args[1])
+	case DockerResource:
+		return deleteDocker(args[1])
+	default:
+	}
+	return fmt.Errorf("unknown resource %s", r)
+}
+func deleteDocker(name string) error {
 	resource, err := user.Client(ListenSock)
 	if err != nil {
 		return err
 	}
-	var (
-		o = u.Unstructured{}
-	)
-	o.SetName(args[0])
-	o.SetGroupVersionKind(gvk(r))
-	switch r {
-	case ImageResource:
-		imgDir, err := model.MdImagesDir()
-		if err != nil {
-			return err
-		}
-		return os.RemoveAll(filepath.Join(imgDir, args[0]))
-	default:
+
+	return resource.Delete(context.TODO(), "docker", name, &meta.Docker{})
+}
+
+func deleteVm(name string) error {
+	resource, err := user.Client(ListenSock)
+	if err != nil {
+		return err
 	}
-	return resource.Delete(context.TODO(), &o)
+
+	return resource.Delete(context.TODO(), "vm", name, &meta.Machine{})
+}
+
+func deleteImage(name string) error {
+	resource, err := user.Client(ListenSock)
+	if err != nil {
+		return err
+	}
+
+	return resource.Delete(context.TODO(), "image", name, &meta.Image{})
 }
 
 // NewCommandDelete delete resource
@@ -50,7 +69,7 @@ func NewCommandDelete() *cobra.Command {
 			if len(args) < 1 {
 				return fmt.Errorf("resource is needed for delete")
 			}
-			return deleter(args[0], args[1:])
+			return deleter(args[0], args)
 		},
 	}
 	return cmd

@@ -1,102 +1,37 @@
-package svc
+package api
 
 import (
 	"context"
 	"fmt"
+	"github.com/aoxn/meridian/internal/tool/server"
 	"k8s.io/klog/v2"
 	"net"
+	"net/http"
 	"os"
 	"path"
 	"strings"
 	"time"
 
 	v1 "github.com/aoxn/meridian/api/v1"
-	"github.com/aoxn/meridian/internal/server/service"
-	"github.com/aoxn/meridian/internal/server/service/backend/local"
-	"github.com/aoxn/meridian/internal/server/service/generic"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func NewGuestInfoPvd(opt *service.Options) service.Provider {
-	return &guestInfoPvd{options: opt}
-}
-
-type guestInfoPvd struct {
-	options *service.Options
-}
-
-func (v *guestInfoPvd) NewAPIGroup(ctx context.Context) (service.Grouped, error) {
-	grp := service.Grouped{}
-	v.addV1(grp, v.options)
-	return grp, nil
-}
-
-func (v *guestInfoPvd) addV1(grp service.Grouped, options *service.Options) {
-	univ := NewGuestInfo(options)
-	grp.AddOrDie(univ)
-}
-
-func NewGuestInfo(options *service.Options) service.Store {
-	var store service.Store
-	switch options.Provider.Type {
-	case "Local":
-		store = &local.Local{
-			Standard: &generic.Store{
-				Scheme: options.Scheme,
-			},
-		}
-	default:
-		panic(fmt.Sprintf("unimplemented provider type: [%s]", options.Provider.Type))
-	}
-	univ := &guestInfo{
-		Store:           store,
-		scheme:          options.Scheme,
-		allowedResource: sets.New[string](),
-	}
-	return univ
-}
-
-type guestInfo struct {
-	service.Store
-	scheme          *runtime.Scheme
-	allowedResource sets.Set[string]
-}
-
-func (u *guestInfo) GVR() schema.GroupVersionResource {
-	return schema.GroupVersionResource{
-		Group:    v1.GroupVersion.Group,
-		Version:  v1.GroupVersion.Version,
-		Resource: "guestinfos",
-	}
-}
-
-func (u *guestInfo) Get(ctx context.Context, object runtime.Object, options *metav1.GetOptions) (runtime.Object, error) {
+func GetGI(r *http.Request, w http.ResponseWriter) int {
 	addrs, err := GetLocalIP()
 	if err != nil {
-		return nil, err
+		return server.HttpJson(w, err)
 	}
-	gi, ok := object.(*v1.GuestInfo)
-	if !ok {
-		return nil, fmt.Errorf("object is not a v1.GuestInfo")
-	}
+	gi := v1.EmptyGI("guest")
 	gi.Spec.Address = addrs
 	req := v1.NewEmptyRequest(gi.Name, v1.RequestSpec{})
-	_, err = u.Store.Get(ctx, req, &metav1.GetOptions{})
-	if err != nil {
-		klog.Infof("requested vm %s: %s", gi.Name, err.Error())
-	}
-	klog.Infof("get guest-vm address: %s", addrs)
 	gi.Status = v1.GuestInfoStatus{
 		Phase:      v1.Running,
 		Conditions: buildCondition(req),
 	}
-	return gi, nil
+	return server.HttpJson(w, gi)
 }
 
 const (

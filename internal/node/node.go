@@ -3,6 +3,8 @@ package node
 import (
 	"context"
 	"fmt"
+	gruntime "runtime"
+
 	v1 "github.com/aoxn/meridian/api/v1"
 	"github.com/aoxn/meridian/internal/node/block"
 	"github.com/aoxn/meridian/internal/node/block/etcd"
@@ -123,6 +125,38 @@ type Meridian struct {
 	request *v1.Request
 }
 
+func (m *Meridian) CreateDocker(ctx context.Context, version, registry string) error {
+	local, err := NewLocal(m.cloud)
+	if err != nil {
+		return errors.Wrap(err, "new local host when")
+	}
+
+	if gruntime.GOOS == "darwin" {
+		return fmt.Errorf("not support darwin yet")
+	}
+	runtimeBlock, err := runtime.NewContainerdBlock(
+		local, version, registry)
+	if err != nil {
+		return errors.Wrap(err, "new runtime block while")
+	}
+	return runtimeBlock.Ensure(ctx)
+}
+
+func (m *Meridian) DestroyDocker(ctx context.Context) error {
+	local, err := NewLocal(m.cloud)
+	if err != nil {
+		return errors.Wrap(err, "new local host when")
+	}
+	if gruntime.GOOS == "darwin" {
+		return fmt.Errorf("not support darwin yet")
+	}
+	runtimeBlock, err := runtime.NewContainerdBlock(local, "", "")
+	if err != nil {
+		return errors.Wrap(err, "new runtime block while")
+	}
+	return runtimeBlock.Purge(ctx)
+}
+
 func (m *Meridian) EnsureNode() error {
 	m.request.Name = ClusterName
 	if err := m.request.Validate(); err != nil {
@@ -176,7 +210,8 @@ func (m *Meridian) DestroyNode() error {
 	if err != nil {
 		return errors.Wrap(err, "new etcd block while")
 	}
-	runtimeBlock, err := runtime.NewContainerdBlock(m.request, local)
+	runtimeBlock, err := runtime.NewContainerdBlock(
+		local, m.request.Spec.Config.Runtime.Version, m.request.Spec.Config.Registry)
 	if err != nil {
 		return errors.Wrap(err, "new runtime block while")
 	}
@@ -213,7 +248,8 @@ func (m *Meridian) buildActionBlocks(local host.Host) ([]block.Block, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "new etcd block while")
 	}
-	runtimeBlock, err := runtime.NewContainerdBlock(m.request, local)
+	runtimeBlock, err := runtime.NewContainerdBlock(
+		local, m.request.Spec.Config.Runtime.Version, m.request.Spec.Config.Registry)
 	if err != nil {
 		return nil, errors.Wrap(err, "new containerd block while")
 	}

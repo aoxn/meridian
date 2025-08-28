@@ -2,12 +2,9 @@ package client
 
 import (
 	"context"
-	"fmt"
-	v1 "github.com/aoxn/meridian/api/v1"
 	rest2 "github.com/aoxn/meridian/client/rest"
 	"k8s.io/klog/v2"
 	"net"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 )
 
@@ -72,11 +69,12 @@ func RestClientFor(endpoint string) (rest2.Interface, error) {
 
 type Interface interface {
 	Raw() rest2.Interface
-	Create(context.Context, client.Object) error
-	Update(context.Context, client.Object) error
-	Delete(context.Context, client.Object) error
-	Get(context.Context, client.Object) error
-	List(context.Context, client.ObjectList) error
+	Healthz(context.Context) error
+	Create(context.Context, string, string, any) error
+	Update(context.Context, string, string, any) error
+	Delete(context.Context, string, string, any) error
+	Get(context.Context, string, string, any) error
+	List(context.Context, string, any) error
 }
 
 func New(
@@ -91,61 +89,70 @@ type resourceSet struct {
 	client rest2.Interface
 }
 
-func (m *resourceSet) kind(o client.Object) string {
-	return fmt.Sprintf("%ss", strings.ToLower(o.GetObjectKind().GroupVersionKind().Kind))
-}
+var pathPrefix = "/api/v1/"
 
-var pathPrefix = fmt.Sprintf("/apis/%s/v1/", v1.GroupVersion.Group)
-
-func (m *resourceSet) Create(ctx context.Context, o client.Object) error {
+func (m *resourceSet) Create(ctx context.Context, r, name string, o any) error {
 	err := m.client.
 		Post().
 		PathPrefix(pathPrefix).
-		Resource(m.kind(o)).
+		Resource(r).
+		ResourceName(name).
 		Body(o).
 		Do(o)
 	return err
 }
 
-func (m *resourceSet) Update(ctx context.Context, o client.Object) error {
+func (m *resourceSet) Update(ctx context.Context, r, name string, o any) error {
 	err := m.client.
 		Put().
 		PathPrefix(pathPrefix).
-		Resource(m.kind(o)).
+		Resource(r).
+		ResourceName(name).
 		Body(o).
 		Do(o)
+	if err == nil {
+		klog.Infof("[%s/%s] Accepted", r, name)
+	}
 	return err
 }
 
-func (m *resourceSet) Delete(ctx context.Context, o client.Object) error {
+func (m *resourceSet) Delete(ctx context.Context, r string, n string, o any) error {
 	err := m.client.
 		Delete().
 		PathPrefix(pathPrefix).
-		Resource(m.kind(o)).
-		ResourceName(o.GetName()).
-		Do(o)
-	return err
-}
-
-func (m *resourceSet) Get(ctx context.Context, o client.Object) error {
-	err := m.client.
-		Get().
-		PathPrefix(pathPrefix).
-		Resource(m.kind(o)).
-		ResourceName(o.GetName()).
-		Do(o)
-	return err
-}
-
-func (m *resourceSet) List(ctx context.Context, out client.ObjectList) error {
-	kind := strings.ToLower(out.GetObjectKind().GroupVersionKind().Kind)
-	if strings.HasSuffix(kind, "list") {
-		kind = kind[0 : len(kind)-4]
+		Resource(r).
+		ResourceName(n).
+		Body(o).
+		DirectDo()
+	if err == nil {
+		klog.Infof("delete [%s/%s] Accepted", r, n)
 	}
+	return err
+}
+
+func (m *resourceSet) Get(ctx context.Context, r string, name string, o any) error {
 	err := m.client.
 		Get().
 		PathPrefix(pathPrefix).
-		Resource(fmt.Sprintf("%ss", kind)).
+		Resource(r).
+		ResourceName(name).
+		Do(o)
+	return err
+}
+
+func (m *resourceSet) Healthz(ctx context.Context) error {
+	err := m.client.
+		Get().
+		Resource("healthz").
+		DirectDo()
+	return err
+}
+
+func (m *resourceSet) List(ctx context.Context, r string, out any) error {
+	err := m.client.
+		Get().
+		PathPrefix(pathPrefix).
+		Resource(r).
 		Do(out)
 	return err
 }

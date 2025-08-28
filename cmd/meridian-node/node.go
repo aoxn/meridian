@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/aoxn/meridian"
 	v1 "github.com/aoxn/meridian/api/v1"
@@ -29,6 +30,7 @@ func NewCommandHost() *cobra.Command {
 	cmd.AddCommand(NewCommandNew())
 	cmd.AddCommand(NewCommandVersion())
 	cmd.AddCommand(NewCommandDestroy())
+	cmd.AddCommand(NewCommandCreate())
 	cmd.AddCommand(command.NewCommandInstall())
 	return cmd
 }
@@ -65,21 +67,31 @@ func NewCommandDestroy() *cobra.Command {
 			if len(args) < 1 {
 				return fmt.Errorf("resource file is needed. eg. [/etc/meridian/request.yaml]")
 			}
-
-			data, err := os.ReadFile(args[0])
-			if err != nil {
-				return err
+			r := args[0]
+			switch r {
+			case "docker":
+				md, err := node.NewMeridianNode(
+					"destroy", v1.NodeRoleMaster, "", "", nil, []string{})
+				if err != nil {
+					return err
+				}
+				return md.DestroyDocker(context.TODO())
+			default:
+				data, err := os.ReadFile(args[0])
+				if err != nil {
+					return err
+				}
+				req := &v1.Request{}
+				err = yaml.Unmarshal(data, req)
+				if err != nil {
+					return err
+				}
+				md, err := node.NewMeridianNode("init", v1.NodeRoleMaster, "", "", req, []string{})
+				if err != nil {
+					return err
+				}
+				return md.DestroyNode()
 			}
-			req := &v1.Request{}
-			err = yaml.Unmarshal(data, req)
-			if err != nil {
-				return err
-			}
-			md, err := node.NewMeridianNode("init", v1.NodeRoleMaster, "", "", req, []string{})
-			if err != nil {
-				return err
-			}
-			return md.DestroyNode()
 		},
 	}
 	return cmd
@@ -112,6 +124,41 @@ func NewCommandInit() *cobra.Command {
 			return md.EnsureNode()
 		},
 	}
+	return cmd
+}
+
+// NewCommandCreate create resource
+func NewCommandCreate() *cobra.Command {
+	var version string
+	var registry string
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "meridian create",
+		Long:  "",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Printf(meridian.Logo)
+			if len(args) < 1 {
+				return fmt.Errorf("resource is needed for create")
+			}
+			r := args[0]
+			switch r {
+			case "docker":
+				if version == "" || registry == "" {
+					return fmt.Errorf("version or registry is needed for init")
+				}
+				md, err := node.NewMeridianNode(
+					v1.ActionInit, v1.NodeRoleMaster, "", "", nil, []string{})
+				if err != nil {
+					return errors.Wrapf(err, "meridian init")
+				}
+				return md.CreateDocker(context.Background(), version, registry)
+			default:
+				return fmt.Errorf("unknown resource: %s", r)
+			}
+		},
+	}
+	cmd.Flags().StringVar(&version, "version", "", "docker version")
+	cmd.Flags().StringVar(&registry, "registry", "", "registry version")
 	return cmd
 }
 

@@ -254,7 +254,7 @@ func (i *iamRole) ListPoliciesForRole(ctx context.Context, m cloud.RamModel) (cl
 
 func (i *iamRole) convertToRamModel(role types.Role) cloud.RamModel {
 	return cloud.RamModel{
-		RamId:   *role.RoleName,
+		RamId:   *role.RoleId,
 		RamName: *role.RoleName,
 		Arn:     *role.Arn,
 	}

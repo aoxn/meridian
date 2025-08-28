@@ -7,34 +7,101 @@ import (
 	"github.com/containerd/containerd/identifiers"
 	"github.com/lima-vm/go-qcow2reader"
 	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"syscall"
 	"time"
 )
 
 type PidCondition struct {
 	Name  string    `json:"name"`
-	PID   string    `json:"pid"`
+	PID   int       `json:"pid"`
 	Stamp time.Time `json:"stamp"`
 }
 
 func (p PidCondition) String() string {
-	return fmt.Sprintf("%s:%s, %s", p.Name, p.PID, p.Stamp)
+	return fmt.Sprintf("%s:%d, %s", p.Name, p.PID, p.Stamp)
 }
 
 type Machine struct {
-	Name      string                 `json:"name"`
-	AbsDir    string                 `json:"absDir"`
-	Protected bool                   `json:"protected"`
-	Spec      *v1.VirtualMachineSpec `json:"spec"`
+	Name       string                 `json:"name"`
+	AbsDir     string                 `json:"absDir"`
+	Created    metav1.Time            `json:"created"`
+	SandboxPID int                    `json:"sandboxPid"`
+	Login      string                 `json:"lgoin"`
+	Spec       *v1.VirtualMachineSpec `json:"spec"`
+	Protected  bool                   `json:"protected"`
+	State      string                 `json:"state"`
+	Message    string                 `json:"message,omitempty"`
+	Address    []string               `json:"address,omitempty"`
+	Stage      []Stage                `json:"stage,omitempty"`
+}
+
+type Stage struct {
+	Phase       string `json:"phase"`
+	Description string `json:"description"`
+}
+
+type StageUtil struct {
+	root string
+}
+
+const (
+	StagePending      = "pending"
+	StageInitializing = "initializing"
+	StageInitialized  = "initialized"
+)
+
+func (g *StageUtil) Get() string {
+	var stage = StagePending
+	stageFile := path.Join(g.root, "stage")
+	_, err := os.Stat(stageFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			_ = g.Set(stage)
+			return stage
+		}
+		return stage
+	}
+	data, err := os.ReadFile(stageFile)
+	if err != nil {
+		klog.Errorf("failed to read stage file: %v", err)
+		return stage
+	}
+	return string(data)
+}
+
+func (g *StageUtil) Initialized() bool {
+	return g.Get() == StageInitialized
+}
+
+func (g *StageUtil) Set(stage string) error {
+	return os.WriteFile(path.Join(g.root, "stage"), []byte(stage), 0755)
 }
 
 func (m *Machine) Dir() string {
 	return m.AbsDir
+}
+
+func (m *Machine) DockerSock() string {
+	return path.Join(m.Dir(), "docker.sock")
+}
+
+func (m *Machine) SandboxSock() string {
+	return path.Join(m.Dir(), "sandbox.sock")
+}
+
+func (m *Machine) GuestSock() string {
+	return path.Join(m.Dir(), fmt.Sprintf("%s.sock", m.Name))
+}
+
+func (m *Machine) StageUtil() *StageUtil {
+	return &StageUtil{root: m.AbsDir}
 }
 
 func (m *Machine) SavePID() error {
@@ -43,10 +110,9 @@ func (m *Machine) SavePID() error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		klog.Errorf("stat pidfile %q : %v", pidFile, err)
 	}
-	pid := strconv.Itoa(os.Getpid())
 	data, _ := json.MarshalIndent(PidCondition{
 		Name:  m.Name,
-		PID:   pid,
+		PID:   os.Getpid(),
 		Stamp: time.Now(),
 	}, "", "    ")
 	return os.WriteFile(pidFile, data, 0o644)
@@ -63,11 +129,7 @@ func (m *Machine) LoadPID() (PidCondition, error) {
 	if err != nil {
 		return PidCondition{}, err
 	}
-	id, err := strconv.Atoi(pid.PID)
-	if err != nil {
-		return PidCondition{}, err
-	}
-	_, err = validatePid(id)
+	_, err = validatePid(pid.PID)
 	if err != nil {
 		_ = os.Remove(pidFile)
 		return PidCondition{}, err
@@ -140,16 +202,12 @@ func (m *Machine) Stop() error {
 		}
 		return err
 	}
-	if pid.PID == "" {
+	if pid.PID == 0 {
 		return os.Remove(m.PIDFile())
 	}
-	id, err := strconv.Atoi(pid.PID)
+	proc, err := os.FindProcess(pid.PID)
 	if err != nil {
-		return err
-	}
-	proc, err := os.FindProcess(id)
-	if err != nil {
-		return err
+		return errors.Wrapf(err, "find pid %d", pid.PID)
 	}
 	err = proc.Signal(os.Interrupt)
 	if err != nil {
@@ -253,4 +311,97 @@ func (d *MountDisk) Lock(instanceDir string) error {
 func (d *MountDisk) Unlock() error {
 	inUseBy := filepath.Join(d.Dir, v1.InUseBy)
 	return os.Remove(inUseBy)
+}
+
+func (m *Machine) SetDefault() error {
+	dft, err := v1.LoadDft()
+	if err != nil {
+		return err
+	}
+	m.Created = metav1.Now()
+
+	if m.Spec.Arch == "" {
+		m.Spec.Arch = dft.Spec.Arch
+	}
+	if m.Spec.Memory == "" {
+		m.Spec.Memory = dft.Spec.Memory
+	}
+	if m.Spec.OS == "" {
+		m.Spec.OS = dft.Spec.OS
+	}
+	if m.Spec.CPUs == 0 {
+		m.Spec.CPUs = dft.Spec.CPUs
+	}
+	if m.Spec.GuestVersion == "" {
+		m.Spec.GuestVersion = dft.Spec.GuestVersion
+	}
+	if m.Spec.Image.Name == "" {
+		m.Spec.Image = dft.Spec.Image
+	}
+	if m.Spec.VMType == "" {
+		m.Spec.VMType = dft.Spec.VMType
+	}
+	if len(m.Spec.AdditionalDisks) == 0 {
+		m.Spec.AdditionalDisks = append(m.Spec.AdditionalDisks, dft.Spec.AdditionalDisks...)
+	}
+	if m.Spec.Disk == "" {
+		m.Spec.Disk = dft.Spec.Disk
+	}
+	if len(m.Spec.Mounts) == 0 {
+		m.Spec.Mounts = append(m.Spec.Mounts, dft.Spec.Mounts...)
+	}
+	if len(m.Spec.Networks) == 0 {
+		m.Spec.Networks = append(m.Spec.Networks, dft.Spec.Networks...)
+	}
+	// set macAddr
+	for i, _ := range m.Spec.Networks {
+		network := m.Spec.Networks[i]
+		if network.MACAddress == "" {
+			network.MACAddress = v1.GenMAC()
+			klog.V(5).Infof("set mac address [%s] for %s", network.MACAddress, network.Interface)
+		}
+		m.Spec.Networks[i] = network
+		klog.V(5).Infof("mac address is: %s for %s", network.MACAddress, network.Interface)
+	}
+	if m.Spec.Audio.Device == "" {
+		m.Spec.Audio.Device = dft.Spec.Audio.Device
+	}
+	if m.Spec.Video.Display == "" {
+		m.Spec.Video.Display = dft.Spec.Video.Display
+	}
+	if m.Spec.Video.VNC.Display == "" {
+		m.Spec.Video.VNC.Display = dft.Spec.Video.VNC.Display
+	}
+
+	m.Spec.SetForward(v1.PortForward{
+		SrcProto: "unix",
+		SrcAddr:  intstr.FromString(m.GuestSock()),
+		DstProto: "vsock",
+		DstAddr:  intstr.FromInt32(10443),
+	})
+	m.Spec.SetMounts(v1.Mount{
+		Writable:   true,
+		Location:   fmt.Sprintf("~/mdata/%s", m.Name),
+		MountPoint: "/mnt/disk0",
+	})
+	return m.Validate()
+}
+
+func (m *Machine) Validate() error {
+	if m.Spec.Arch == "" {
+		return fmt.Errorf("arch must be specified: x86_64, aarch64")
+	}
+	if m.Spec.Image.Name == "" {
+		return fmt.Errorf("image name must be specified")
+	}
+	if m.Spec.VMType == "" {
+		return fmt.Errorf("vm type must be specified")
+	}
+	if m.Spec.CPUs == 0 {
+		return fmt.Errorf("cpus must be specified")
+	}
+	if m.Spec.OS == "" {
+		return fmt.Errorf("os must be specified")
+	}
+	return nil
 }

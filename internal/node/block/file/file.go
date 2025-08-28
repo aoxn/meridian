@@ -6,7 +6,7 @@ import (
 	v1 "github.com/aoxn/meridian/api/v1"
 	"github.com/aoxn/meridian/internal/node/host"
 	"github.com/aoxn/meridian/internal/tool/cmd"
-	"github.com/aoxn/meridian/internal/vmm/model"
+	"github.com/aoxn/meridian/internal/vmm/meta"
 	"github.com/pkg/errors"
 	tar "github.com/verybluebot/tarinator-go"
 	"k8s.io/klog/v2"
@@ -301,7 +301,7 @@ func (k *PathInfo) setDefault() error {
 		k.Namespace = "default"
 	}
 	if k.CacheDir == "" {
-		home, err := model.MdHOME()
+		home, err := meta.DftRoot()
 		if err != nil {
 			home = os.TempDir()
 		}

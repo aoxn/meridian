@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/aoxn/meridian"
-	"github.com/aoxn/meridian/internal/apihandler"
+	"github.com/aoxn/meridian/internal/daemon"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
@@ -53,8 +53,8 @@ func NewCommandServe() *cobra.Command {
 			"Kubernetes clusters and empower strong infrastructure resilience ability and easy recovery"),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := apihandler.RunDaemonAPI(context.TODO())
-			return err
+			app := daemon.NewApp(context.TODO(), &daemon.Configuration{})
+			return app.Start()
 		},
 	}
 	return cmd
