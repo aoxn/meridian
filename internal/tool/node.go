@@ -305,7 +305,7 @@ contexts:
     user: {{ .UserName }}
   name: {{.UserName}}@{{.ClusterName}}
 current-context: {{.UserName}}@{{.ClusterName}}
-kind: Spec
+kind: Config
 preferences: {}
 users:
 - name: {{ .UserName }}

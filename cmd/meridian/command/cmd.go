@@ -43,25 +43,28 @@ type createflag struct {
 	arch        string
 	recoverMode bool
 
-	in string
+	in      string
+	version string
 
 	withNodeGroups bool
 	withKubernetes bool
 }
 
 const (
-	DefaultEndpoint    = ""
-	VirtualMachineShot = "vm"
-	VirtualMachine     = "virtualmachine"
-	ClusterResource    = "cluster"
-	MasterSetResource  = "masterset"
-	TaskResource       = "task"
-	ImageResource      = "image"
-	ImagesResource     = "images"
-	AddonResource      = "addon"
-	KubeconfigResource = "kubeconfig"
-	RequestResource    = "request"
-	DockerResource     = "docker"
+	DefaultEndpoint        = ""
+	VirtualMachineShot     = "vm"
+	VirtualMachine         = "virtualmachine"
+	ClusterResource        = "cluster"
+	MasterSetResource      = "masterset"
+	TaskResource           = "task"
+	ImageResource          = "image"
+	ImagesResource         = "images"
+	AddonResource          = "addon"
+	KubeconfigResource     = "kubeconfig"
+	RequestResource        = "request"
+	DockerResource         = "docker"
+	KubernetesResource     = "kubernetes"
+	KubernetesResourceShot = "k8s"
 )
 
 func transformResource(resource string) string {

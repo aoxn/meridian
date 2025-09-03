@@ -47,13 +47,30 @@ function setup::uninstall() {
     sudo rm -rf ~/Library/Caches/meridian || true
 }
 
+function setup::download() {
+    local src=$1
+    local dst=$2
+    if [[ "$src" == "" || "$dst" == "" ]];
+    then
+        echo "unexpected empty download src or dst"; exit
+    fi
+    if which wget >/dev/null;
+    then
+       wget -q -O "$dst" "$src"
+       return
+    fi
+    if which curl >/dev/null;
+    then
+        curl -sSL "$src" > "$dst"
+    fi
+}
+
 function setup::install_meridian() {
 
-    wget -q -O /tmp/meridian."${os}".${arch}.tar.gz \
-            $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz
+        setup::download $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz /tmp/meridian."${os}".${arch}.tar.gz
 
-    wget -q -O /tmp/meridian."${os}".${arch}.tar.gz.sum \
-            $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz.sum
+        setup::download $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz.sum /tmp/meridian."${os}".${arch}.tar.gz.sum
+
     #md5sum -c /tmp/meridian.${os}.${arch}.tar.gz.sum
     tar xf /tmp/meridian."${os}".${arch}.tar.gz -C /tmp
     sudo mv -f /tmp/bin/meridian."${os}".${arch} /usr/local/bin/meridian
@@ -123,9 +140,7 @@ EOF
 }
 
 function setup::install_meridian_node() {
-    wget -q -O /tmp/meridian-node."${os}".${arch}.tar.gz \
-            $server/bin/"${os}"/${arch}/${version}/meridian-node."${os}".${arch}.tar.gz
-
+        setup::download $server/bin/"${os}"/${arch}/${version}/meridian-node."${os}".${arch}.tar.gz /tmp/meridian-node."${os}".${arch}.tar.gz
     tar xf /tmp/meridian-node."${os}".${arch}.tar.gz -C /tmp
     sudo mv -f /tmp/bin/meridian-node."${os}".${arch} /usr/local/bin/meridian-node
     rm -rf /tmp/meridian-node."${os}".${arch}.tar.gz /tmp/meridian-node."${os}".${arch}.tar.gz.sum

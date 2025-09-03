@@ -17,6 +17,7 @@ limitations under the License.
 package rest
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"strings"
@@ -31,13 +32,13 @@ const (
 
 // Interface captures the set of operations for generically interacting with Kubernetes REST apis.
 type Interface interface {
-	Verb(verb string) *Request
-	Post() *Request
-	Put() *Request
-	Patch(pt string) *Request
-	Get() *Request
-	Delete() *Request
-	APIVersion() string
+	Verb(ctx context.Context, verb string) *Request
+	Post(ctx context.Context) *Request
+	Put(ctx context.Context) *Request
+	Patch(ctx context.Context, pt string) *Request
+	Get(ctx context.Context) *Request
+	Delete(ctx context.Context) *Request
+	APIVersion(ctx context.Context) string
 }
 
 // RESTClient imposes common Kubernetes API conventions on a set of resource paths.
@@ -99,9 +100,10 @@ func NewRESTClient(
 //
 // if err != nil { ... }
 // list, ok := resp.(*api.PodList)
-func (c *RESTClient) Verb(verb string) *Request {
+func (c *RESTClient) Verb(ctx context.Context, verb string) *Request {
 
 	return NewRequest(
+		ctx,
 		c.Client,
 		verb, c.base,
 		c.versionedAPIPath,
@@ -110,31 +112,31 @@ func (c *RESTClient) Verb(verb string) *Request {
 }
 
 // Post begins a POST request. Short for c.Verb("POST").
-func (c *RESTClient) Post() *Request {
-	return c.Verb("POST")
+func (c *RESTClient) Post(ctx context.Context) *Request {
+	return c.Verb(ctx, "POST")
 }
 
 // Put begins a PUT request. Short for c.Verb("PUT").
-func (c *RESTClient) Put() *Request {
-	return c.Verb("PUT")
+func (c *RESTClient) Put(ctx context.Context) *Request {
+	return c.Verb(ctx, "PUT")
 }
 
 // Patch begins a PATCH request. Short for c.Verb("Patch").
-func (c *RESTClient) Patch(pt string) *Request {
-	return c.Verb("PATCH").SetHeader("Content-Type", string(pt))
+func (c *RESTClient) Patch(ctx context.Context, pt string) *Request {
+	return c.Verb(ctx, "PATCH").SetHeader("Content-Type", string(pt))
 }
 
 // Get begins a GET request. Short for c.Verb("GET").
-func (c *RESTClient) Get() *Request {
-	return c.Verb("GET")
+func (c *RESTClient) Get(ctx context.Context) *Request {
+	return c.Verb(ctx, "GET")
 }
 
 // Delete begins a DELETE request. Short for c.Verb("DELETE").
-func (c *RESTClient) Delete() *Request {
-	return c.Verb("DELETE")
+func (c *RESTClient) Delete(ctx context.Context) *Request {
+	return c.Verb(ctx, "DELETE")
 }
 
 // APIVersion returns the APIVersion this RESTClient is expected to use.
-func (c *RESTClient) APIVersion() string {
+func (c *RESTClient) APIVersion(ctx context.Context) string {
 	return "v1"
 }

@@ -9,8 +9,10 @@ import (
 	v1 "github.com/aoxn/meridian/api/v1"
 	"github.com/cheggaaa/pb/v3"
 	"github.com/mattn/go-isatty"
+	gerrors "github.com/pkg/errors"
 	"io"
 	"k8s.io/klog/v2"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -39,6 +41,7 @@ func New(size int64) (*pb.ProgressBar, error) {
 		bar.SetRefreshRate(5 * time.Second)
 	}
 	bar.SetWidth(80)
+	bar.SetWriter(os.Stderr)
 	if err := bar.Err(); err != nil {
 		return nil, err
 	}
@@ -77,6 +80,8 @@ type options struct {
 	decompress     bool   // default: false (keep compression)
 	description    string // default: url
 	expectedDigest digest.Digest
+	downloadBar    *pb.ProgressBar
+	decompressBar  *pb.ProgressBar
 }
 
 type Opt func(*options) error
@@ -114,6 +119,20 @@ func WithDescription(description string) Opt {
 func WithDecompress(decompress bool) Opt {
 	return func(o *options) error {
 		o.decompress = decompress
+		return nil
+	}
+}
+
+func WithDecompressBar(bar *pb.ProgressBar) Opt {
+	return func(o *options) error {
+		o.decompressBar = bar
+		return nil
+	}
+}
+
+func WithDownloadBar(bar *pb.ProgressBar) Opt {
+	return func(o *options) error {
+		o.downloadBar = bar
 		return nil
 	}
 }
@@ -221,7 +240,7 @@ func Download(ctx context.Context, local, remote string, opts ...Opt) (*Result, 
 
 	ext := path.Ext(remote)
 	if IsLocal(remote) {
-		if err := copyLocal(ctx, localPath, remote, ext, o.decompress, o.description, o.expectedDigest); err != nil {
+		if err := copyLocal(ctx, localPath, remote, ext, o.decompress, o.description, o.expectedDigest, o.decompressBar); err != nil {
 			return nil, err
 		}
 		res := &Result{
@@ -232,7 +251,7 @@ func Download(ctx context.Context, local, remote string, opts ...Opt) (*Result, 
 	}
 
 	if o.cacheDir == "" {
-		if err := downloadHTTP(ctx, localPath, "", "", remote, o.description, o.expectedDigest); err != nil {
+		if err := downloadHTTP(ctx, localPath, "", "", remote, o.description, o.expectedDigest, o.downloadBar); err != nil {
 			return nil, err
 		}
 		res := &Result{
@@ -258,11 +277,11 @@ func Download(ctx context.Context, local, remote string, opts ...Opt) (*Result, 
 			if err := validateCachedDigest(shadDigest, o.expectedDigest); err != nil {
 				return nil, err
 			}
-			if err := copyLocal(ctx, localPath, shadData, ext, o.decompress, "", ""); err != nil {
+			if err := copyLocal(ctx, localPath, shadData, ext, o.decompress, "", "", o.decompressBar); err != nil {
 				return nil, err
 			}
 		} else {
-			if err := copyLocal(ctx, localPath, shadData, ext, o.decompress, o.description, o.expectedDigest); err != nil {
+			if err := copyLocal(ctx, localPath, shadData, ext, o.decompress, o.description, o.expectedDigest, o.decompressBar); err != nil {
 				return nil, err
 			}
 		}
@@ -285,11 +304,11 @@ func Download(ctx context.Context, local, remote string, opts ...Opt) (*Result, 
 	if err := os.WriteFile(shadURL, []byte(remote), 0o644); err != nil {
 		return nil, err
 	}
-	if err := downloadHTTP(ctx, shadData, shadTime, shadType, remote, o.description, o.expectedDigest); err != nil {
+	if err := downloadHTTP(ctx, shadData, shadTime, shadType, remote, o.description, o.expectedDigest, o.downloadBar); err != nil {
 		return nil, err
 	}
 	// no need to pass the digest to copyLocal(), as we already verified the digest
-	if err := copyLocal(ctx, localPath, shadData, ext, o.decompress, "", ""); err != nil {
+	if err := copyLocal(ctx, localPath, shadData, ext, o.decompress, "", "", o.decompressBar); err != nil {
 		return nil, err
 	}
 	if shadDigest != "" && o.expectedDigest != "" {
@@ -405,7 +424,7 @@ func canonicalLocalPath(s string) (string, error) {
 	return v1.Expand(s)
 }
 
-func copyLocal(ctx context.Context, dst, src, ext string, decompress bool, description string, expectedDigest digest.Digest) error {
+func copyLocal(ctx context.Context, dst, src, ext string, decompress bool, description string, expectedDigest digest.Digest, bar *pb.ProgressBar) error {
 	srcPath, err := canonicalLocalPath(src)
 	if err != nil {
 		return err
@@ -431,9 +450,9 @@ func copyLocal(ctx context.Context, dst, src, ext string, decompress bool, descr
 		if command != "" {
 			switch command {
 			case "tar":
-				return decompressTar(ctx, command, dstPath, srcPath, ext, description)
+				return decompressTar(ctx, command, dstPath, srcPath, ext, description, bar)
 			}
-			return decompressLocal(ctx, command, dstPath, srcPath, ext, description)
+			return decompressLocal(ctx, command, dstPath, srcPath, ext, description, bar)
 		}
 	}
 	// TODO: progress bar for copy
@@ -455,23 +474,35 @@ func decompressor(ext string) string {
 	}
 }
 
-func decompressTar(ctx context.Context, decompressCmd, dst, src, ext, description string) error {
+func decompressTar(ctx context.Context, decompressCmd, dst, src, ext, description string, bar *pb.ProgressBar) error {
 	klog.Infof("decompressing %s with %v", ext, decompressCmd)
 
 	st, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
-	bar, err := New(st.Size())
-	if err != nil {
-		return err
+
+	if bar == nil {
+		bar, err = New(st.Size())
+		if err != nil {
+			return err
+		}
+	} else {
+		bar.SetTotal(st.Size())
 	}
 	if HideProgress {
 		hideBar(bar)
 	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
 
 	buf := new(bytes.Buffer)
-	cmd := exec.CommandContext(ctx, decompressCmd, "-xf", src, "-C", filepath.Dir(dst)) // -d --decompress
+	cmd := exec.CommandContext(ctx, decompressCmd, "-xf", "-", "-C", filepath.Dir(dst)) // -d --decompress
+	cmd.Stdin = bar.NewProxyReader(in)
+
 	if !HideProgress {
 		if description == "" {
 			description = filepath.Base(src)
@@ -490,16 +521,20 @@ func decompressTar(ctx context.Context, decompressCmd, dst, src, ext, descriptio
 	return err
 }
 
-func decompressLocal(ctx context.Context, decompressCmd, dst, src, ext, description string) error {
+func decompressLocal(ctx context.Context, decompressCmd, dst, src, ext, description string, bar *pb.ProgressBar) error {
 	klog.Infof("decompressing %s with %v", ext, decompressCmd)
 
 	st, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
-	bar, err := New(st.Size())
-	if err != nil {
-		return err
+	if bar == nil {
+		bar, err = New(st.Size())
+		if err != nil {
+			return err
+		}
+	} else {
+		bar.SetTotal(st.Size())
 	}
 	if HideProgress {
 		hideBar(bar)
@@ -579,24 +614,74 @@ func validateLocalFileDigest(localPath string, expectedDigest digest.Digest) err
 	return nil
 }
 
-func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url, description string, expectedDigest digest.Digest) error {
+func setAcceptRange(in string, accept string) {
+	if accept == "" {
+		return
+	}
+	err := os.WriteFile(in, []byte(accept), 0o644)
+	if err != nil {
+		klog.Errorf("downloadHTTP: failed to write accept-ranges header to %q: %v", in, err)
+	}
+	klog.V(5).Info("set accept-range file: %s", in)
+}
+
+func readAcceptRange(in string) bool {
+	_, err := os.Stat(in)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
+func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url, description string, expectedDigest digest.Digest, bar *pb.ProgressBar) error {
 	if localPath == "" {
 		return fmt.Errorf("downloadHTTP: got empty localPath")
 	}
 	klog.V(5).Infof("downloading: [%q] -> [%q]", url, localPath)
-	localPathTmp := localPath + ".tmp"
-	if err := os.RemoveAll(localPathTmp); err != nil {
-		return err
-	}
-	fileWriter, err := os.Create(localPathTmp)
-	if err != nil {
-		return err
-	}
-	defer fileWriter.Close()
 
-	resp, err := httpclient.Get(ctx, http.DefaultClient, url)
+	var (
+		locaTmp      = localPath + ".tmp"
+		arLocation   = localPath + ".accept-ranges"
+		err          error
+		f            *os.File
+		header       = map[string]string{}
+		acceptRanges = readAcceptRange(arLocation)
+	)
+
+	if acceptRanges {
+		// 支持断点续传
+		f, err = os.OpenFile(
+			locaTmp, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			return err
+		}
+
+		defer f.Close()
+		fileInfo, err := f.Stat()
+		if err != nil {
+			return err
+		}
+		header["User-Agent"] = fmt.Sprintf("Safari/18615.3.12.11.%s", rand.Int())
+		header["Range"] = fmt.Sprintf("bytes=%d-", fileInfo.Size())
+		klog.V(5).Infof("download start from breaking point: %s", fileInfo.Size())
+	} else {
+		// 不支持断点续传
+		klog.V(5).Infof("download from groud up: clean up cache")
+		err = os.RemoveAll(locaTmp)
+		if err != nil {
+			return gerrors.Wrapf(err, "clean tmp file %q", locaTmp)
+		}
+		f, err = os.Create(locaTmp)
+		if err != nil {
+			return gerrors.Wrapf(err, "create tmp file %q", locaTmp)
+		}
+		defer f.Close()
+		header["Range"] = fmt.Sprintf("bytes=0-")
+	}
+
+	resp, err := httpclient.GetWithHeader(ctx, http.DefaultClient, url, header)
 	if err != nil {
-		return err
+		return gerrors.Wrapf(err, "download with header")
 	}
 	if lastModified != "" {
 		lm := resp.Header.Get("Last-Modified")
@@ -610,16 +695,22 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 			return err
 		}
 	}
+	setAcceptRange(arLocation, resp.Header.Get("Accept-Ranges"))
+
 	defer resp.Body.Close()
-	bar, err := New(resp.ContentLength)
-	if err != nil {
-		return err
-	}
-	if HideProgress {
-		hideBar(bar)
+	if bar == nil {
+		bar, err = New(resp.ContentLength)
+		if err != nil {
+			return err
+		}
+		if HideProgress {
+			hideBar(bar)
+		}
+	} else {
+		bar.SetTotal(resp.ContentLength)
 	}
 
-	writers := []io.Writer{fileWriter}
+	writers := []io.Writer{f}
 	var digester digest.Digester
 	if expectedDigest != "" {
 		algo := expectedDigest.Algorithm()
@@ -652,16 +743,16 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 		}
 	}
 
-	if err := fileWriter.Sync(); err != nil {
+	if err := f.Sync(); err != nil {
 		return err
 	}
-	if err := fileWriter.Close(); err != nil {
+	if err := f.Close(); err != nil {
 		return err
 	}
 	if err := os.RemoveAll(localPath); err != nil {
 		return err
 	}
-	return os.Rename(localPathTmp, localPath)
+	return os.Rename(locaTmp, localPath)
 }
 
 //

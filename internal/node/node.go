@@ -196,7 +196,7 @@ func (m *Meridian) saveRequest() error {
 	return os.WriteFile(path.Join(mpath, "request.cfg"), []byte(tool.PrettyYaml(m.request)), 0755)
 }
 
-func (m *Meridian) DestroyNode() error {
+func (m *Meridian) DestroyNode(force bool) error {
 	local, err := NewLocal(m.cloud)
 	if err != nil {
 		return errors.Wrap(err, "new local host when")
@@ -209,11 +209,6 @@ func (m *Meridian) DestroyNode() error {
 	etcdBlock, err := etcd.NewBlock(m.request, local, m.action)
 	if err != nil {
 		return errors.Wrap(err, "new etcd block while")
-	}
-	runtimeBlock, err := runtime.NewContainerdBlock(
-		local, m.request.Spec.Config.Runtime.Version, m.request.Spec.Config.Registry)
-	if err != nil {
-		return errors.Wrap(err, "new runtime block while")
 	}
 
 	nvidiaBlock, err := runtime.NewNvidiaBlock(m.request, local)
@@ -229,9 +224,18 @@ func (m *Meridian) DestroyNode() error {
 	if err != nil {
 		return errors.Wrap(err, "new kube auth block while")
 	}
-
 	blocks := []block.Block{
-		kubeAuthBlock, kubeletBlock, nvidiaBlock, runtimeBlock, etcdBlock,
+		kubeAuthBlock, kubeletBlock, nvidiaBlock, etcdBlock,
+	}
+
+	var runtimeBlock block.Block
+	if force {
+		runtimeBlock, err = runtime.NewContainerdBlock(
+			local, m.request.Spec.Config.Runtime.Version, m.request.Spec.Config.Registry)
+		if err != nil {
+			return errors.Wrap(err, "new runtime block while")
+		}
+		blocks = append(blocks, runtimeBlock)
 	}
 	ctx := context.TODO()
 	for _, b := range blocks {

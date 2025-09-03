@@ -41,9 +41,8 @@ type HostAgent struct {
 	vmMeta  *meta.Machine
 	ssh     *sshutil.SSHMgr
 	ci      *cidata.CloudInit
+	driver  backend.Driver
 	connect *connectivity.Connectivity
-
-	driver backend.Driver
 
 	onClose []func() error // LIFO
 
@@ -212,6 +211,11 @@ func (ha *HostAgent) GenDisk(ctx context.Context) error {
 }
 
 func (ha *HostAgent) EnsureCIISO(ctx context.Context) error {
+	switch strings.ToLower(string(ha.vmMeta.Spec.OS)) {
+	case "darwin":
+		return nil // darwin do not install guest
+	default:
+	}
 	vmInfo := ha.vmMeta.Spec
 
 	extracted := path.Join(ha.vmMeta.Dir(), "bin")
@@ -268,8 +272,7 @@ func (ha *HostAgent) startRoutinesAndWait(ctx context.Context, errCh chan error)
 			if closeErr := ha.close(); closeErr != nil {
 				klog.Errorf("an error during shutting down the host agent: %s", closeErr)
 			}
-			err := ha.driver.Stop(ctx)
-			return err
+			return driverErr
 		case <-ctx.Done():
 			klog.Info("context canceled, shutting down the host agent")
 			if closeErr := ha.close(); closeErr != nil {
@@ -370,7 +373,7 @@ func (ha *HostAgent) Serve(ctx context.Context) {
 			"/api/v1/forward/{name}": sandbox.RemoveForward,
 		},
 		"PUT": {
-			"api/v1/vm/stop/{name}": sandbox.StopVm,
+			"/api/v1/vm/stop/{name}": sandbox.StopVm,
 		},
 	})
 	err := damon.Start(ctx)
@@ -448,10 +451,14 @@ func (sbx *sandboxHandler) StopVm(r *http.Request, w http.ResponseWriter) int {
 		return server.HttpJson(w, fmt.Errorf("unexpected empty name"))
 	default:
 	}
-	klog.Infof("tring to stop vm %s", name)
-	err := sbx.host.driver.Stop(r.Context())
-	if err != nil {
-		return server.HttpJson(w, err)
-	}
+	klog.Infof("sandbox: receieve vm stop request, %s", name)
+	go func() {
+		klog.Infof("sandbox: tring to stop vm %s", name)
+
+		err := sbx.host.driver.Stop(context.TODO())
+		if err != nil {
+			klog.Errorf("sandbox: stop vm error, %s", err.Error())
+		}
+	}()
 	return server.HttpJson(w, "Accepted")
 }

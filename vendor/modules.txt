@@ -5,8 +5,8 @@ github.com/Azure/go-ansiterm/winterm
 # github.com/Code-Hex/go-infinity-channel v1.0.0
 ## explicit; go 1.18
 github.com/Code-Hex/go-infinity-channel
-# github.com/Code-Hex/vz/v3 v3.5.1
-## explicit; go 1.19
+# github.com/Code-Hex/vz/v3 v3.7.1
+## explicit; go 1.22.0
 github.com/Code-Hex/vz/v3
 github.com/Code-Hex/vz/v3/internal/objc
 github.com/Code-Hex/vz/v3/internal/progress
@@ -803,7 +803,7 @@ golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/exp/constraints
 golang.org/x/exp/maps
 golang.org/x/exp/slices
-# golang.org/x/mod v0.21.0
+# golang.org/x/mod v0.22.0
 ## explicit; go 1.22.0
 golang.org/x/mod/semver
 # golang.org/x/net v0.30.0

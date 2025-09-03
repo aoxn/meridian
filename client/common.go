@@ -93,7 +93,7 @@ var pathPrefix = "/api/v1/"
 
 func (m *resourceSet) Create(ctx context.Context, r, name string, o any) error {
 	err := m.client.
-		Post().
+		Post(ctx).
 		PathPrefix(pathPrefix).
 		Resource(r).
 		ResourceName(name).
@@ -104,7 +104,7 @@ func (m *resourceSet) Create(ctx context.Context, r, name string, o any) error {
 
 func (m *resourceSet) Update(ctx context.Context, r, name string, o any) error {
 	err := m.client.
-		Put().
+		Put(ctx).
 		PathPrefix(pathPrefix).
 		Resource(r).
 		ResourceName(name).
@@ -118,7 +118,7 @@ func (m *resourceSet) Update(ctx context.Context, r, name string, o any) error {
 
 func (m *resourceSet) Delete(ctx context.Context, r string, n string, o any) error {
 	err := m.client.
-		Delete().
+		Delete(ctx).
 		PathPrefix(pathPrefix).
 		Resource(r).
 		ResourceName(n).
@@ -132,7 +132,7 @@ func (m *resourceSet) Delete(ctx context.Context, r string, n string, o any) err
 
 func (m *resourceSet) Get(ctx context.Context, r string, name string, o any) error {
 	err := m.client.
-		Get().
+		Get(ctx).
 		PathPrefix(pathPrefix).
 		Resource(r).
 		ResourceName(name).
@@ -142,7 +142,7 @@ func (m *resourceSet) Get(ctx context.Context, r string, name string, o any) err
 
 func (m *resourceSet) Healthz(ctx context.Context) error {
 	err := m.client.
-		Get().
+		Get(ctx).
 		Resource("healthz").
 		DirectDo()
 	return err
@@ -150,7 +150,7 @@ func (m *resourceSet) Healthz(ctx context.Context) error {
 
 func (m *resourceSet) List(ctx context.Context, r string, out any) error {
 	err := m.client.
-		Get().
+		Get(ctx).
 		PathPrefix(pathPrefix).
 		Resource(r).
 		Do(out)

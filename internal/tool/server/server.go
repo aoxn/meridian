@@ -58,7 +58,7 @@ func NewOrDie(ctx context.Context, cfg *Config, handler map[string]map[string]Ha
 func (svr *Server) setHandler(routes map[string]map[string]HandlerFunc) *Server {
 	for method, mappings := range routes {
 		for r, hfn := range mappings {
-			klog.V(6).Infof("start to register http router:[%s] %s", method, r)
+			klog.V(5).Infof("start to register http router:[%s] %s", method, r)
 			svr.handler.Path(r).Methods(method).HandlerFunc(
 				func(w http.ResponseWriter, req *http.Request) {
 
@@ -166,27 +166,37 @@ func DecodeBody(body io.ReadCloser, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
+type Result struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
 func HttpJson(w http.ResponseWriter, v interface{}) int {
-	var text string
+	var result Result
+	var text []byte
 	code := http.StatusOK
 	switch v.(type) {
 	case error:
-		text = v.(error).Error()
-		code = http.StatusInternalServerError
+		result.Message = v.(error).Error()
+		result.Code = http.StatusInternalServerError
+		text, _ = json.Marshal(result)
 	case string:
-		text = v.(string)
+		result.Message = v.(string)
+		result.Code = http.StatusOK
+		text, _ = json.Marshal(result)
 	default:
 		resp, err := json.Marshal(v)
 		if err != nil {
-			text = err.Error()
-			code = http.StatusInternalServerError
+			result.Code = http.StatusInternalServerError
+			result.Message = err.Error()
+			text, _ = json.Marshal(result)
 			break
 		}
-		text = string(resp)
+		text = resp
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	_, err := io.Copy(w, bytes.NewBuffer([]byte(text)))
+	_, err := io.Copy(w, bytes.NewBuffer(text))
 	if err != nil {
 		klog.Errorf("httpJson copy response: %s", err.Error())
 	}
@@ -194,23 +204,30 @@ func HttpJson(w http.ResponseWriter, v interface{}) int {
 }
 
 func HttpJsonCode(w http.ResponseWriter, v interface{}, code int) int {
-	var text string
+	var result Result
+	var text []byte
 	switch v.(type) {
 	case error:
-		text = v.(error).Error()
+		result.Code = code
+		result.Message = v.(error).Error()
+		text, _ = json.Marshal(result)
 	case string:
-		text = v.(string)
+		result.Code = code
+		result.Message = v.(string)
+		text, _ = json.Marshal(result)
 	default:
 		resp, err := json.Marshal(v)
 		if err != nil {
-			text = err.Error()
+			result.Code = http.StatusInternalServerError
+			result.Message = err.Error()
+			text, _ = json.Marshal(result)
 			break
 		}
-		text = string(resp)
+		text = resp
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	_, err := io.Copy(w, bytes.NewBuffer([]byte(text)))
+	_, err := io.Copy(w, bytes.NewBuffer(text))
 	if err != nil {
 		klog.Errorf("httpJsonCode copy response: %s", err.Error())
 	}

@@ -1,10 +1,21 @@
 package command
 
 import (
+	"context"
 	"fmt"
+	"strings"
+
+	"os"
+	"time"
+
+	"bufio"
+	"encoding/json"
 	"github.com/aoxn/meridian"
 	api "github.com/aoxn/meridian/api/v1"
+	user "github.com/aoxn/meridian/client"
 	"github.com/aoxn/meridian/internal/vmm/meta"
+	"github.com/cheggaaa/pb/v3"
+	"github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
@@ -46,21 +57,62 @@ func PullImage(name string) error {
 	if f == nil {
 		return fmt.Errorf("unexpected image name: [%s], use[ m get image -d ] obtain available images", name)
 	}
-
-	backend, err := meta.NewLocal()
-	if err != nil {
-		return errors.Wrapf(err, "failed to load local image repo")
+	backend := meta.Local
+	_, err := backend.Image().Get(name)
+	if err == nil {
+		return fmt.Errorf("already exist: %s", name)
 	}
+	client, err := user.Client(ListenSock)
+	if err != nil {
+		return err
+	}
+	rst := client.Raw()
+	r, err := rst.Get(context.TODO()).
+		PathPrefix("/api/v1").
+		Resource("image/pull").
+		ResourceName(name).Stream()
+	if err != nil {
+		return errors.Wrapf(err, "pull image")
+	}
+
+	defer r.Close()
+	bar, err := New(0)
+	if err != nil {
+		return err
+	}
+	bar.Start()
+	defer bar.Finish()
+	scanner := bufio.NewScanner(r)
+	klog.Infof("pulling image: [%s]", name)
+	for scanner.Scan() {
+		//		klog.Infof("scan text: %s", scanner.Text())
+		var data meta.Status
+		err := json.Unmarshal([]byte(scanner.Text()), &data)
+		if err != nil {
+			return err
+		}
+		if data.Err != "" {
+			if strings.Contains(data.Err, "PullComplete") {
+				bar.SetTotal(data.Data[0].Total)
+				bar.SetCurrent(data.Data[0].Current)
+				break
+			}
+			klog.Errorf("server responed: %s", data.Err)
+			return errors.Wrapf(err, "server error:")
+		}
+		//bar.SetTotal(100)
+		//bar.SetCurrent(int64(cnt))
+		bar.SetTotal(data.Data[0].Total)
+		bar.SetCurrent(data.Data[0].Current)
+	}
+
 	img := meta.Image{
 		Name:     name,
 		Arch:     string(f.Arch),
 		OS:       f.OS,
+		Version:  f.Version,
 		Labels:   f.Labels,
 		Location: f.Location,
-	}
-	err = backend.Image().Pull(&img)
-	if err != nil {
-		return errors.Wrapf(err, "failed to pull image")
 	}
 	return backend.Image().Create(&img)
 }
@@ -71,4 +123,25 @@ func getImage() ([]*meta.Image, error) {
 		return nil, err
 	}
 	return backend.Image().List()
+}
+
+func New(size int64) (*pb.ProgressBar, error) {
+	bar := pb.New64(size)
+
+	bar.Set(pb.Bytes, true)
+	if isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd()) {
+		bar.SetTemplateString(`{{counters . }} {{bar . | green }} {{percent .}} {{speed . "%s/s"}}`)
+		bar.SetRefreshRate(200 * time.Millisecond)
+	} else {
+		bar.Set(pb.Terminal, false)
+		bar.Set(pb.ReturnSymbol, "\n")
+		bar.SetTemplateString(`{{counters . }} ({{percent .}}) {{speed . "%s/s"}}`)
+		bar.SetRefreshRate(5 * time.Second)
+	}
+	bar.SetWidth(80)
+	if err := bar.Err(); err != nil {
+		return nil, err
+	}
+
+	return bar, nil
 }

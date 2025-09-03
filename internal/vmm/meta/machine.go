@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	v1 "github.com/aoxn/meridian/api/v1"
@@ -28,6 +29,122 @@ func (p PidCondition) String() string {
 	return fmt.Sprintf("%s:%d, %s", p.Name, p.PID, p.Stamp)
 }
 
+type machine struct {
+	root string
+}
+
+func (m *machine) Dir() string {
+	return m.rootLocation()
+}
+
+func (m *machine) rootLocation(name ...string) string {
+	return path.Join(m.root, "vms", path.Join(name...))
+}
+
+func (m *machine) Get(key string) (*Machine, error) {
+	mch, err := m.get(key)
+	if err != nil {
+		return mch, err
+	}
+	pid, _ := mch.LoadPID()
+	mch.SandboxPID = pid.PID
+	return mch, nil
+}
+
+func (m *machine) get(key string) (*Machine, error) {
+	pathName := m.rootLocation(key)
+	info, err := os.Stat(pathName)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		return nil, errors.Wrapf(err, "NotFound: %s", key)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory", pathName)
+	}
+	return m.load(path.Join(pathName, machineJson))
+}
+
+func (m *machine) List() ([]*Machine, error) {
+	var machines []*Machine
+	pathName := m.Dir()
+	info, err := os.Stat(pathName)
+	if err != nil {
+		return machines, err
+	}
+	if !info.IsDir() {
+		return machines, fmt.Errorf("%s is not a directory", pathName)
+	}
+	// walk directory
+	en, err := os.ReadDir(pathName)
+	if err != nil {
+		return machines, err
+	}
+	for _, dir := range en {
+		dirName := dir.Name()
+		mch, err := m.Get(dirName)
+		if err != nil {
+			continue
+		}
+		machines = append(machines, mch)
+	}
+	return machines, nil
+}
+
+func (m *machine) Create(machine *Machine) error {
+	pathName := m.rootLocation(machine.Name)
+	_, err := os.Stat(pathName)
+	if err == nil {
+		return fmt.Errorf("%s already exists", pathName)
+	}
+	err = os.MkdirAll(pathName, 0755)
+	if err != nil {
+		return err
+	}
+	machine.AbsDir = pathName
+
+	data, err := json.MarshalIndent(machine, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path.Join(pathName, machineJson), data, 0644)
+}
+
+func (m *machine) Update(machine *Machine) error {
+	pathName := m.rootLocation(machine.Name)
+	_, err := os.Stat(pathName)
+	if err != nil {
+		return fmt.Errorf("%s not exists", pathName)
+	}
+	data, err := json.MarshalIndent(machine, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path.Join(pathName, machineJson), data, 0644)
+}
+
+func (m *machine) Destroy(machine *Machine) error {
+	if machine.Name == "" {
+		return fmt.Errorf("machine name is empty")
+	}
+	return os.RemoveAll(m.rootLocation(machine.Name))
+}
+
+func (m *machine) load(machineUri string) (*Machine, error) {
+	data, err := os.ReadFile(machineUri)
+	if err != nil {
+		return nil, err
+	}
+	var mch Machine
+	err = json.Unmarshal(data, &mch)
+	if err != nil {
+		return nil, err
+	}
+	mch.AbsDir = m.rootLocation(mch.Name)
+	return &mch, nil
+}
+
 type Machine struct {
 	Name       string                 `json:"name"`
 	AbsDir     string                 `json:"absDir"`
@@ -43,8 +160,9 @@ type Machine struct {
 }
 
 type Stage struct {
-	Phase       string `json:"phase"`
-	Description string `json:"description"`
+	Phase       string    `json:"phase"`
+	Timestamp   time.Time `json:"timestamp"`
+	Description string    `json:"description"`
 }
 
 type StageUtil struct {
@@ -135,6 +253,26 @@ func (m *Machine) LoadPID() (PidCondition, error) {
 		return PidCondition{}, err
 	}
 	return pid, nil
+}
+
+func (m *Machine) WaitStop(ctx context.Context, timeout time.Duration) error {
+
+	after := time.After(timeout)
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context done: %s", m.Name)
+		case <-after:
+			return fmt.Errorf("timeout wait for stop: %s", m.Name)
+		default:
+		}
+
+		_, err := m.LoadPID()
+		if err != nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("timeout wait for vm stop")
 }
 
 func validatePid(pid int) (int, error) {

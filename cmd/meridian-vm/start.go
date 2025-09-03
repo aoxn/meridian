@@ -59,6 +59,7 @@ func Start(args []string, cfgfile string) error {
 	}
 	go signalFunc()
 	if vm.Spec.GUI {
+		klog.Infof("run gui with lock thread")
 		// Without this the call to vz.RunGUI fails. Adding it here, as this has to be called before the vz cgo loads.
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()

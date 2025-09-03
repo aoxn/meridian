@@ -2,11 +2,11 @@ package rest
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	gerrors "github.com/pkg/errors"
 	"io"
-	"io/ioutil"
 	"k8s.io/klog/v2"
 	"net"
 	"net/http"
@@ -28,6 +28,7 @@ type HTTPClient interface {
 }
 
 func NewRequest(
+	ctx context.Context,
 	client HTTPClient,
 	verb string,
 	baseURL *url.URL,
@@ -40,6 +41,7 @@ func NewRequest(
 		pathPrefix = path.Join(pathPrefix, baseURL.Path)
 	}
 	r := &Request{
+		ctx:        ctx,
 		client:     client,
 		verb:       verb,
 		baseURL:    baseURL,
@@ -54,6 +56,7 @@ func NewRequest(
 // Any errors are stored until the end of your call, so you only have to
 // check once.
 type Request struct {
+	ctx context.Context
 	// required
 	client HTTPClient
 	verb   string
@@ -127,7 +130,7 @@ func (req *Request) Body(obj interface{}) *Request {
 	}
 	switch t := obj.(type) {
 	case string:
-		data, err := ioutil.ReadFile(t)
+		data, err := os.ReadFile(t)
 		if err != nil {
 			req.err = err
 			return req
@@ -260,6 +263,34 @@ func (req *Request) Decode(data string, api interface{}) error {
 	return json.Unmarshal([]byte(data), api)
 }
 
+func (req *Request) Stream() (io.ReadCloser, error) {
+	url, err := req.Url()
+	if err != nil {
+		return nil, err
+	}
+
+	klog.V(8).Infof("send stream request to %s", url)
+	// TODO: body should be reset on retry
+	requ, err := http.NewRequestWithContext(req.ctx, req.verb, url, req.body)
+
+	if err != nil {
+		return nil, err
+	}
+	if req.client == nil {
+		req.client = &http.Client{}
+	}
+	resp, err := req.client.Do(requ)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 && resp.StatusCode != 202 {
+		return nil, fmt.Errorf("unexpected request: code: %d", resp.StatusCode)
+	}
+
+	return resp.Body, nil
+}
+
 func (req *Request) send() (string, error) {
 	url, err := req.Url()
 	if err != nil {
@@ -268,7 +299,7 @@ func (req *Request) send() (string, error) {
 
 	klog.V(8).Infof("send request to %s", url)
 	// TODO: body should be reset on retry
-	requ, err := http.NewRequest(req.verb, url, req.body)
+	requ, err := http.NewRequestWithContext(req.ctx, req.verb, url, req.body)
 
 	if err != nil {
 		return "", err

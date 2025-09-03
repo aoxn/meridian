@@ -11,6 +11,8 @@ import (
 	gerrors "github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"os"
+	"runtime"
+	"strings"
 )
 
 func createNew(flags *createflag, args []string) error {
@@ -20,6 +22,8 @@ func createNew(flags *createflag, args []string) error {
 		return createVm(flags, args)
 	case DockerResource:
 		return createDocker(flags, args)
+	case KubernetesResourceShot, KubernetesResource:
+		return createK8s(flags, args)
 	}
 	return fmt.Errorf("unexpected resource: %s", r)
 }
@@ -35,6 +39,20 @@ func createDocker(flags *createflag, args []string) error {
 	}
 	var spec = meta.Docker{Name: name}
 	return client.Create(ctx, "docker", name, &spec)
+}
+
+func createK8s(flags *createflag, args []string) error {
+	client, err := user.Client(ListenSock)
+	if err != nil {
+		return err
+	}
+	var ctx = context.TODO()
+	var name = flags.in
+	if name == "" {
+		return fmt.Errorf("vm name is required by --in=xxx ")
+	}
+	var spec = meta.Kubernetes{Name: name, Version: flags.version, VmName: name}
+	return client.Create(ctx, "k8s", name, &spec)
 }
 
 func createVm(flags *createflag, args []string) error {
@@ -65,6 +83,7 @@ func newMachine(name string, flags *createflag) (*v1.VirtualMachineSpec, error) 
 		err = yaml.Unmarshal(data, spec)
 		return &spec, err
 	}
+
 	if flags.mems != "" {
 		spec.Memory = flags.mems
 	}
@@ -75,6 +94,26 @@ func newMachine(name string, flags *createflag) (*v1.VirtualMachineSpec, error) 
 		spec.Arch = v1.NewArch(flags.arch)
 	}
 	if flags.image != "" {
+		var f = v1.FindImage(flags.image)
+		if f == nil {
+			return nil, fmt.Errorf("image %s not found", flags.image)
+		}
+		if f.Labels == nil {
+			f.Labels = make(map[string]string)
+		}
+		gui := strings.ToLower(f.Labels["gui"])
+		switch gui {
+		case "false":
+			spec.GUI = false
+		case "true":
+			spec.GUI = true
+			spec.Video.Display = "default"
+		}
+		spec.OS = v1.OS(f.OS)
+		if string(f.Arch) != runtime.GOARCH {
+			return nil, fmt.Errorf("local arch %s does not match image arch %s", runtime.GOARCH, f.Arch)
+		}
+		spec.Arch = f.Arch
 		spec.Image = v1.ImageLocation{Name: flags.image}
 	}
 	return &spec, nil

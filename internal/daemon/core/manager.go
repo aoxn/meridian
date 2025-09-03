@@ -36,11 +36,13 @@ func NewContext() (*Context, error) {
 	if err != nil {
 		return nil, err
 	}
+	k8sMgr, err := NewK8sMgr(vmMgr.stateMgr)
 	return &Context{
 		meta:      backend,
 		vmMgr:     vmMgr,
-		imageMgr:  &LocalImageMgr{},
+		imageMgr:  vmMgr.imgMgr,
 		dockerMgr: dockerMgr,
+		k8sMgr:    k8sMgr,
 	}, nil
 }
 
@@ -49,6 +51,7 @@ type Context struct {
 	vmMgr     *LocalVMMgr
 	imageMgr  *LocalImageMgr
 	dockerMgr *LocalDockerMgr
+	k8sMgr    *LocalK8sMgr
 }
 
 func (ctx *Context) Backend() meta.Backend {
@@ -67,6 +70,10 @@ func (ctx *Context) DockerMgr() *LocalDockerMgr {
 	return ctx.dockerMgr
 }
 
+func (ctx *Context) K8sMgr() *LocalK8sMgr {
+	return ctx.k8sMgr
+}
+
 func NewLocalVMMgr(backend meta.Backend) (*LocalVMMgr, error) {
 	stateMgr, err := newVMStateMgr(backend)
 	if err != nil {
@@ -76,6 +83,7 @@ func NewLocalVMMgr(backend meta.Backend) (*LocalVMMgr, error) {
 		backend:  backend,
 		tskMgr:   newTaskMgr(),
 		stateMgr: stateMgr,
+		imgMgr:   NewLocalImageMgr(backend),
 	}
 	go local.periodical()
 	return local, nil
@@ -85,6 +93,7 @@ type LocalVMMgr struct {
 	backend  meta.Backend
 	tskMgr   *taskMgr
 	stateMgr *vmStateMgr
+	imgMgr   *LocalImageMgr
 }
 
 func (mgr *LocalVMMgr) periodical() {
@@ -238,17 +247,22 @@ func (mgr *LocalVMMgr) initialVm(ctx context.Context, state *vmState) error {
 	_ = vm.StageUtil().Set(meta.StageInitializing)
 	defer mgr.backend.Machine().Update(vm)
 	klog.Infof("start to initialize vm: %s", vm.Name)
-	state.restStage(Pulling, "pulling image: [%s]", img.Name)
-	err := mgr.backend.Image().Pull(img)
-	if err != nil {
+	state.restStage(StatePulling, "pulling image: [%s]", img.Name)
+	pull, err := mgr.imgMgr.Pull(img.Name)
+	if err != nil && !strings.Contains(err.Error(), "PullComplete") {
 		state.addStage(Error, "pull image error: [%s], %s", img.Name, err.Error())
 		return fmt.Errorf("[%s]pull image %s failed: %v", vm.Name, img.Name, err)
+	}
+	// todo wait image pull
+	err = pull.Wait(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "wait for image pulling")
 	}
 	host, err := hostagent.New(vm, nil)
 	if err != nil {
 		return err
 	}
-	state.addStage(Pulled, "image pulled")
+	state.addStage(StatePulled, "image pulled")
 	state.addStage(PrepareDisk, "prepare base disk: [%s]", "diff")
 	err = host.GenDisk(ctx)
 	if err != nil {
@@ -261,13 +275,6 @@ func (mgr *LocalVMMgr) initialVm(ctx context.Context, state *vmState) error {
 		return errors.Wrapf(err, "set stage %s", meta.StageInitialized)
 	}
 	return lo.Ternary(state.nextAction != Starting, nil, state.runVm(ctx))
-}
-
-type LocalImageMgr struct {
-}
-
-func (img *LocalImageMgr) Pull(name string) error {
-	panic("not implement")
 }
 
 func newVMStateMgr(bk meta.Backend) (*vmStateMgr, error) {
@@ -304,18 +311,19 @@ type vmState struct {
 }
 
 const (
-	Unknown  = "UnKnown"
-	Created  = "Created"
-	Running  = "Running"
-	Stopping = "Stopping"
-	Stopped  = "Stopped"
-	Starting = "Starting"
-	Error    = "Error"
+	Unknown   = "UnKnown"
+	Created   = "Created"
+	Running   = "Running"
+	Deploying = "Deploying"
+	Stopping  = "Stopping"
+	Stopped   = "Stopped"
+	Starting  = "Starting"
+	Error     = "Error"
 )
 const (
-	Pulling      = "PullingImage"
-	Pulled       = "ImagePulled"
-	Failed       = "Failed"
+	StatePulling = "PullingImage"
+	StatePulled  = "ImagePulled"
+	StateFailed  = "Failed"
 	PrepareDisk  = "PrepareDisk"
 	DiskPrepared = "DiskPrepared"
 )
@@ -385,6 +393,7 @@ func (m *vmState) restStage(phase string, msg ...any) {
 
 	stage := meta.Stage{
 		Phase:       phase,
+		Timestamp:   time.Now(),
 		Description: fmtMessage(msg...),
 	}
 	m.machine.Stage = []meta.Stage{stage}
@@ -394,6 +403,7 @@ func (m *vmState) addStage(phase string, msg ...any) {
 
 	stage := meta.Stage{
 		Phase:       phase,
+		Timestamp:   time.Now(),
 		Description: fmtMessage(msg...),
 	}
 	m.machine.Stage = append(m.machine.Stage, stage)
@@ -420,7 +430,10 @@ func (m *vmState) stopVm(ctx context.Context) error {
 	}
 	klog.Infof("[%s]waiting for vm steady ", m.machine.Name)
 	// wait starting false
-	for {
+	for i := 0; i < 600; i++ {
+		if i > 598 {
+			return fmt.Errorf("timeout wait for stop vm: %s", m.name)
+		}
 		if !get() {
 			break
 		}
@@ -435,9 +448,36 @@ func (m *vmState) stopVm(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "new sandbox client")
 	}
-	err = sdbx.Update(ctx, "vm/stop", m.name, m.machine)
-	if err != nil {
-		klog.Infof("stop remote host-vm: %s", err.Error())
+
+	finished := make(chan error)
+
+	ctx, cancelFn := context.WithCancel(ctx)
+	go func(ctx context.Context) {
+		err = sdbx.Update(ctx, "vm/stop", m.name, m.machine)
+		if err != nil {
+			klog.Infof("stop remote host-vm: %s", err.Error())
+		} else {
+			// wait for pid gone
+			err = m.machine.WaitStop(ctx, 3*time.Minute)
+		}
+		finished <- err
+	}(ctx)
+
+	defer cancelFn()
+
+	select {
+	case <-time.After(30 * time.Second):
+		m.setState(Error, "timeout 30s")
+		return fmt.Errorf("timeout after 30s seconds wait for vm stop: %s", m.name)
+	case <-ctx.Done():
+		m.setState(Error, "stop vm: context done")
+		return fmt.Errorf("context done: %s, %s", m.machine.Name, ctx.Err())
+	case errMsg := <-finished:
+		klog.Infof("vm stopped(call sandbox stop): %s", m.machine.Name)
+		if errMsg != nil {
+			m.setState(Error, "stop vm: %s", errMsg.Error())
+			return fmt.Errorf("vm stop err: %s", errMsg.Error())
+		}
 	}
 	err = m.machine.Stop()
 	if err != nil {

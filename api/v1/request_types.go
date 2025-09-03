@@ -96,6 +96,42 @@ func (req *Request) GetAddon(name string) *Addon {
 	return nil
 }
 
+func (spec *RequestSpec) SetDefault() {
+	if spec.Config.Etcd.Version == "" {
+		spec.Config.Etcd.Version = "v3.4.3"
+	}
+	if spec.Config.Runtime.Version == "" {
+		spec.Config.Runtime.Version = "1.6.28"
+	}
+	if spec.Config.Runtime.NvidiaToolKitVersion == "" {
+		spec.Config.Runtime.NvidiaToolKitVersion = "1.17.5"
+	}
+	if spec.Config.Runtime.RuntimeType == "" {
+		spec.Config.Runtime.RuntimeType = "containerd"
+	}
+	if spec.Config.Registry == "" {
+		spec.Config.Registry = "registry.cn-hangzhou.aliyuncs.com"
+	}
+	if spec.Config.Kubernetes.Version == "" {
+		spec.Config.Kubernetes.Version = "1.31.1-aliyun.1"
+	}
+	if spec.Config.Namespace == "" {
+		spec.Config.Namespace = "default"
+	}
+	if spec.Config.CloudType == "" {
+		spec.Config.CloudType = "public"
+	}
+	if spec.Config.Network.SVCCIDR == "" {
+		spec.Config.Network.SVCCIDR = "172.16.0.1/16"
+	}
+	if spec.Config.Network.PodCIDR == "" {
+		spec.Config.Network.PodCIDR = "10.0.0.0/16"
+	}
+	if spec.Config.Network.Domain == "" {
+		spec.Config.Network.Domain = "host.local"
+	}
+}
+
 func (req *Request) Validate() error {
 	if req.Spec.AccessPoint.Intranet == "" {
 		return errors.New("apiserver access point must not be empty")
@@ -104,39 +140,7 @@ func (req *Request) Validate() error {
 		return errors.New("cluster tls certs must not be empty")
 	}
 
-	if req.Spec.Config.Etcd.Version == "" {
-		req.Spec.Config.Etcd.Version = "v3.4.3"
-	}
-	if req.Spec.Config.Runtime.Version == "" {
-		req.Spec.Config.Runtime.Version = "1.6.28"
-	}
-	if req.Spec.Config.Runtime.NvidiaToolKitVersion == "" {
-		req.Spec.Config.Runtime.NvidiaToolKitVersion = "1.17.5"
-	}
-	if req.Spec.Config.Runtime.RuntimeType == "" {
-		req.Spec.Config.Runtime.RuntimeType = "containerd"
-	}
-	if req.Spec.Config.Registry == "" {
-		req.Spec.Config.Registry = "registry.cn-hangzhou.aliyuncs.com"
-	}
-	if req.Spec.Config.Kubernetes.Version == "" {
-		req.Spec.Config.Kubernetes.Version = "1.31.1-aliyun.1"
-	}
-	if req.Spec.Config.Namespace == "" {
-		req.Spec.Config.Namespace = "default"
-	}
-	if req.Spec.Config.CloudType == "" {
-		req.Spec.Config.CloudType = "public"
-	}
-	if req.Spec.Config.Network.SVCCIDR == "" {
-		req.Spec.Config.Network.SVCCIDR = "172.16.0.1/16"
-	}
-	if req.Spec.Config.Network.PodCIDR == "" {
-		req.Spec.Config.Network.PodCIDR = "10.0.0.0/16"
-	}
-	if req.Spec.Config.Network.Domain == "" {
-		req.Spec.Config.Network.Domain = "host.local"
-	}
+	req.Spec.SetDefault()
 	return nil
 }
 

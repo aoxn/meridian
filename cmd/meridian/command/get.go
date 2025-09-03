@@ -235,6 +235,8 @@ func GetNew(flags *commandFlags, args []string) error {
 		return showVms(flags)
 	case DockerResource:
 		return showDocker(flags)
+	case KubernetesResource, KubernetesResourceShot:
+		return showK8s(flags)
 	default:
 	}
 	return fmt.Errorf("unknown resource [%s], available %s", r, expectedResource)
@@ -253,6 +255,7 @@ func showImages(flags *commandFlags) error {
 				OS:       v.OS,
 				Labels:   v.Labels,
 				Arch:     string(v.Arch),
+				Version:  v.Version,
 				Location: v.Location,
 			})
 		}
@@ -268,12 +271,12 @@ func showImages(flags *commandFlags) error {
 	case "yaml", "yml":
 		fmt.Println(tool.PrettyYaml(imgs))
 	default:
-		fmt.Printf("%-30s%-10s%-10s%-15s\n", "NAME", "OS", "ARCH", "LABELS")
+		fmt.Printf("%-30s%-10s%-10s%-15s%-15s\n", "NAME", "OS", "ARCH", "VERSION", "LABELS")
 		for _, img := range imgs {
 			l := lo.MapToSlice(img.Labels, func(k string, v string) string {
 				return fmt.Sprintf("%s:%s", k, v)
 			})
-			fmt.Printf("%-30s%-10s%-10s%-15s\n", img.Name, img.OS, img.Arch, strings.Join(l, ","))
+			fmt.Printf("%-30s%-10s%-10s%-15s%-15s\n", img.Name, img.OS, img.Arch, img.Version, strings.Join(l, ","))
 		}
 	}
 	return nil
@@ -318,7 +321,7 @@ func showDocker(flags *commandFlags) error {
 	}
 	err = client.List(context.TODO(), "docker", &mchs)
 	if err != nil {
-		return errors.Wrap(err, "get vms failed")
+		return errors.Wrap(err, "get docker failed")
 	}
 
 	switch flags.output {
@@ -332,6 +335,33 @@ func showDocker(flags *commandFlags) error {
 		for _, mch := range mchs {
 			fmt.Printf("%-15s%-15s%-15s%-30s\n",
 				mch.Name, mch.Version, mch.VmName, fmt.Sprintf("[docker context use %s]", mch.Name))
+		}
+	}
+	return nil
+}
+
+func showK8s(flags *commandFlags) error {
+	var mchs []*meta.Kubernetes
+	client, err := user.Client(ListenSock)
+	if err != nil {
+		return errors.Wrap(err, "get client failed")
+	}
+	err = client.List(context.TODO(), "k8s", &mchs)
+	if err != nil {
+		return errors.Wrap(err, "get k8s failed")
+	}
+
+	switch flags.output {
+	case "json":
+		fmt.Println(tool.PrettyJson(mchs))
+	case "yaml", "yml":
+		fmt.Println(tool.PrettyYaml(mchs))
+	default:
+		fmt.Printf("%-15s%-20s%-15s%-10s%-30s\n",
+			"NAME", "VERSION", "REF_VM", "STATE", "ENDPOINT")
+		for _, mch := range mchs {
+			fmt.Printf("%-15s%-20s%-15s%-10s%-30s\n",
+				mch.Name, mch.Spec.Config.Kubernetes.Version, mch.VmName, mch.State, fmt.Sprintf("[kubectl context use %s]", mch.Name))
 		}
 	}
 	return nil
@@ -387,7 +417,7 @@ func checkServerHeartbeat2(cmd *cobra.Command, _ []string) error {
 
 func heartbeat(client rest.Interface) error {
 	health := v1.Healthy{}
-	return client.Get().PathPrefix("/healthy").Do(&health)
+	return client.Get(context.TODO()).PathPrefix("/healthy").Do(&health)
 }
 
 func startApp(ctx context.Context, client rest.Interface) error {

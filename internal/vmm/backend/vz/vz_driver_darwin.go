@@ -12,14 +12,17 @@ import (
 	"github.com/aoxn/meridian/api/v1"
 	"github.com/aoxn/meridian/internal/tool/downloader"
 	"github.com/aoxn/meridian/internal/tool/iso9660util"
+	"github.com/aoxn/meridian/internal/vmm/meta"
 	nativeimg "github.com/aoxn/meridian/internal/vmm/nativeimg"
 	"github.com/docker/go-units"
+	gerrors "github.com/pkg/errors"
 	dialer "golang.org/x/net/proxy"
 	"k8s.io/klog/v2"
 	"net"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -85,17 +88,18 @@ func (l *VzDriver) Initialize(_ context.Context) error {
 }
 
 func (l *VzDriver) CreateDisk(ctx context.Context) error {
-	diffDisk := filepath.Join(l.I.Dir(), v1.DiffDisk)
+	i := l.I
+	diffDisk := filepath.Join(i.Dir(), v1.DiffDisk)
 	if _, err := os.Stat(diffDisk); err == nil || !errors.Is(err, os.ErrNotExist) {
 		// disk is already ensured
 		return err
 	}
-	vmInfo := l.I.Spec
-	baseDisk := filepath.Join(l.I.Dir(), v1.BaseDisk)
+	vmInfo := i.Spec
+	baseDisk := filepath.Join(i.Dir(), v1.BaseDisk)
 	if _, err := os.Stat(baseDisk); errors.Is(err, os.ErrNotExist) {
-		f := v1.FindImage(l.I.Spec.Image.Name)
+		f := v1.FindImage(i.Spec.Image.Name)
 		if f == nil {
-			return fmt.Errorf("unexpected image name: [%s]", l.I.Spec.Image.Name)
+			return fmt.Errorf("unexpected image name: [%s]", i.Spec.Image.Name)
 		}
 		if f.Arch != vmInfo.Arch {
 			return fmt.Errorf("%q: unsupported arch: %q, expected=%q", f.Location, f.Arch, vmInfo.Arch)
@@ -111,7 +115,23 @@ func (l *VzDriver) CreateDisk(ctx context.Context) error {
 		}
 		klog.Infof("download base disk for image: %s, from %s, [%s]", vmInfo.Image.Name, f.Location, res.Status)
 	}
-	diskSize, _ := units.RAMInBytes(l.I.Spec.Disk)
+	switch strings.ToLower(string(l.I.Spec.OS)) {
+	case "darwin":
+		image := filepath.Join(l.I.Dir(), v1.BaseDisk)
+		vm, err := createInstallVM(l.BaseDriver, image)
+		if err != nil {
+			return gerrors.Wrapf(err, "create disk")
+		}
+		return installVm(ctx, vm, image)
+	default:
+	}
+	return createDiskLinux(ctx, l.I)
+}
+
+func createDiskLinux(ctx context.Context, i *meta.Machine) error {
+	diffDisk := filepath.Join(i.Dir(), v1.DiffDisk)
+	baseDisk := filepath.Join(i.Dir(), v1.BaseDisk)
+	diskSize, _ := units.RAMInBytes(i.Spec.Disk)
 	if diskSize == 0 {
 		return nil
 	}

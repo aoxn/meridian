@@ -134,6 +134,7 @@ case "$1" in
 	release::mac_universal_package
 	;;
 "meridian")
+	release::meridian "darwin" "arm64"
 	release::meridian "darwin" "amd64"
 	;;
 "meridian-node")

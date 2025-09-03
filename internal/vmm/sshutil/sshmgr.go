@@ -2,6 +2,7 @@ package sshutil
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
@@ -56,7 +57,7 @@ func (ssh *SSHMgr) SetAddr(addr string) {
 	ssh.address = addr
 }
 
-func (ssh *SSHMgr) RunCommand(vmName, cmd string) (string, error) {
+func (ssh *SSHMgr) RunCommand(ctx context.Context, vmName, cmd string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(ssh.cfgDir, v1.UserPrivateKey))
 	if err != nil {
 		return "", err
@@ -72,7 +73,7 @@ func (ssh *SSHMgr) RunCommand(vmName, cmd string) (string, error) {
 		},
 		HostKeyCallback: sshk.InsecureIgnoreHostKey(),
 	}
-	klog.Infof("debug ssh %s@%s %s", vmName, ssh.address, cmd)
+	klog.V(5).Infof("debug ssh %s@%s %s", vmName, ssh.address, cmd)
 
 	client, err := sshk.Dial("tcp", fmt.Sprintf("%s:%d", ssh.address, ssh.port), config)
 	if err != nil {
@@ -88,8 +89,9 @@ func (ssh *SSHMgr) RunCommand(vmName, cmd string) (string, error) {
 	defer session.Close()
 	var b bytes.Buffer
 	session.Stdout = &b
+	session.Stderr = &b
 	if err := session.Run(cmd); err != nil {
-		klog.Infof("failed to run command, with output: %s: %s", err.Error(), b.String())
+		klog.Infof("failed to run command, with output: %s, [%s]", err.Error(), b.String())
 		return "", errors.Wrapf(err, "failed to run command")
 	}
 

@@ -51,6 +51,8 @@ const (
 	HostAgentStdoutLog   = "ha.stdout.log"
 	HostAgentStderrLog   = "ha.stderr.log"
 	VzIdentifier         = "vz-identifier"
+	AuxiliaryStoraage    = "auxiliary.storage"
+	HardwareModel        = "hardware.model"
 	VzEfi                = "vz-efi"           // efi variable generic
 	QemuEfiCodeFD        = "qemu-efi-code.fd" // efi code; not always created
 	AnsibleInventoryYAML = "ansible-inventory.yaml"

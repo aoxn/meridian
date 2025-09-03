@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -99,7 +100,6 @@ func (vm *vmWrapper) Loop(ctx context.Context, driver *backend.BaseDriver) {
 				err := driver.I.SavePID()
 				if err != nil {
 					klog.Errorf("save pidfile %q already exists", driver.I.PIDFile())
-					vm.errCh <- err
 				}
 				filesToRemove[driver.I.PIDFile()] = struct{}{}
 			case vz.VirtualMachineStateStopped:
@@ -117,16 +117,39 @@ func (vm *vmWrapper) Loop(ctx context.Context, driver *backend.BaseDriver) {
 	}
 }
 
-func createVM(driver *backend.BaseDriver) (*vz.VirtualMachine, error) {
-	vmConfig, err := createInitialConfig(driver)
+func createInstallVM(driver *backend.BaseDriver, image string) (*vz.VirtualMachine, error) {
+	if image == "" {
+		return nil, errors.New("restore image is required")
+	}
+	vmConfig, err := newInitialConfig(driver)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = attachPlatformConfig(driver, vmConfig); err != nil {
+	platform, err := newPlatformConfigGeneric(driver, image)
+	if err != nil {
+		return nil, err
+	}
+	vmConfig.SetPlatformVirtualMachineConfiguration(platform)
+	return newVmWithCfg(driver, vmConfig)
+}
+
+func createVM(driver *backend.BaseDriver) (*vz.VirtualMachine, error) {
+	vmConfig, err := newInitialConfig(driver)
+	if err != nil {
 		return nil, err
 	}
 
+	platform, err := newPlatformConfigGeneric(driver, "")
+	if err != nil {
+		return nil, err
+	}
+	vmConfig.SetPlatformVirtualMachineConfiguration(platform)
+	return newVmWithCfg(driver, vmConfig)
+}
+
+func newVmWithCfg(driver *backend.BaseDriver, vmConfig *vz.VirtualMachineConfiguration) (*vz.VirtualMachine, error) {
+	var err error
 	if err = attachSerialPort(driver, vmConfig); err != nil {
 		return nil, err
 	}
@@ -163,6 +186,15 @@ func createVM(driver *backend.BaseDriver) (*vz.VirtualMachine, error) {
 	return vz.NewVirtualMachine(vmConfig)
 }
 
+func newInitialConfig(driver *backend.BaseDriver) (*vz.VirtualMachineConfiguration, error) {
+	switch strings.ToLower(string(driver.I.Spec.OS)) {
+	case "darwin":
+		return createInitialConfigMac(driver)
+	default:
+	}
+	return createInitialConfig(driver)
+}
+
 func createInitialConfig(driver *backend.BaseDriver) (*vz.VirtualMachineConfiguration, error) {
 	efiVariableStore, err := getEFI(driver)
 	if err != nil {
@@ -179,29 +211,38 @@ func createInitialConfig(driver *backend.BaseDriver) (*vz.VirtualMachineConfigur
 		return nil, err
 	}
 
-	vmConfig, err := vz.NewVirtualMachineConfiguration(
+	return vz.NewVirtualMachineConfiguration(
 		bootLoader,
 		uint(driver.I.Spec.CPUs),
 		uint64(bytes),
 	)
+}
+
+func newPlatformConfigGeneric(driver *backend.BaseDriver, image string) (vz.PlatformConfiguration, error) {
+
+	switch strings.ToLower(string(driver.I.Spec.OS)) {
+	case "darwin":
+		// darwin amd64 not supported
+		// darwin arm64
+		return newPlatformConfigMac(driver, image)
+	default:
+		//linux
+	}
+	return newPlatformConfigLinux(driver)
+}
+
+func newPlatformConfigLinux(driver *backend.BaseDriver) (vz.PlatformConfiguration, error) {
+	machineIdentifier, err := getMachineIdentifier(driver)
 	if err != nil {
 		return nil, err
 	}
-	return vmConfig, nil
-}
 
-func attachPlatformConfig(driver *backend.BaseDriver, vmConfig *vz.VirtualMachineConfiguration) error {
-	machineIdentifier, err := getMachineIdentifier(driver)
-	if err != nil {
-		return err
-	}
-
-	platformConfig, err := vz.NewGenericPlatformConfiguration(vz.WithGenericMachineIdentifier(machineIdentifier))
-	if err != nil {
-		return err
-	}
-	vmConfig.SetPlatformVirtualMachineConfiguration(platformConfig)
-	return nil
+	return vz.NewGenericPlatformConfiguration(vz.WithGenericMachineIdentifier(machineIdentifier))
+	//if err != nil {
+	//	return err
+	//}
+	//vmConfig.SetPlatformVirtualMachineConfiguration(platformConfig)
+	//return nil
 }
 
 // https://developer.apple.com/documentation/virtualization/running_linux_in_a_virtual_machine?language=objc#:~:text=Configure%20the%20Serial%20Port%20Device%20for%20Standard%20In%20and%20Out

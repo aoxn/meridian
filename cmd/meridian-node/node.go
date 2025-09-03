@@ -58,6 +58,7 @@ func NewJoinRequest(req *v1.Request) *v1.Request {
 
 // NewCommandDestroy create resource
 func NewCommandDestroy() *cobra.Command {
+	forceDestroy := false
 	cmd := &cobra.Command{
 		Use:   "destroy",
 		Short: "meridian destroy /etc/meridian/request.yaml",
@@ -90,10 +91,11 @@ func NewCommandDestroy() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return md.DestroyNode()
+				return md.DestroyNode(forceDestroy)
 			}
 		},
 	}
+	cmd.PersistentFlags().BoolVar(&forceDestroy, "force", false, "force destroy")
 	return cmd
 }
 

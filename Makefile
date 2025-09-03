@@ -88,11 +88,11 @@ help: ## Display this help.
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
-	go fmt ./...
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go fmt ./...
 
 .PHONY: vet
 vet: ## Run go vet against code.
-	go vet ./...
+	GOOS=$(GOOS)  GOARCH=$(GOARCH) go vet ./...
 
 .PHONY: test
 test: fmt vet envtest ## Run tests.
@@ -155,7 +155,7 @@ meridian-node: fmt vet
 	sudo cp -rf bin/meridian-node.$(GOOS).$(GOARCH) /usr/local/bin/meridian-node
 
 .PHONY: meridian-vm
-meridian-vm: fmt vet
+meridian-vm: fmt
 	@echo Build meridian-vm binary[$(GOOS)][$(GOARCH)].
 	GOOS=$(GOOS)                \
 	GOARCH=$(GOARCH)             \
@@ -164,7 +164,7 @@ meridian-vm: fmt vet
 	sudo cp -rf bin/meridian-vm.$(GOOS).$(GOARCH) /usr/local/bin/meridian-vm
 
 .PHONY: meridian
-meridian: fmt vet
+meridian:
 	@echo Build meridian binary[$(GOOS)][$(GOARCH)].
 	GOOS=$(GOOS)                \
 	GOARCH=$(GOARCH)             \
@@ -172,7 +172,7 @@ meridian: fmt vet
 	sudo cp -rf bin/meridian.$(GOOS).$(GOARCH) /usr/local/bin/meridian
 
 .PHONY: meridiand
-meridiand: fmt vet
+meridiand: fmt
 	@echo Build meridiand binary[$(GOOS)][$(GOARCH)].
 	GOOS=$(GOOS)                \
 	GOARCH=$(GOARCH)             \

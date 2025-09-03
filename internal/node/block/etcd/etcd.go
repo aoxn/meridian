@@ -26,7 +26,7 @@ import (
 
 const (
 	ETCD_USER      = "etcd"
-	ETCD_HOME      = "/mnt/disk0/etcd"
+	ETCD_HOME      = "/var/lib/etcd"
 	ETCD_TMP       = "/var/tmp/etcd"
 	ETCD_UNIT_FILE = "/etc/systemd/system/etcd.service"
 )
@@ -82,12 +82,18 @@ func (a *etcd) Ensure(ctx context.Context) error {
 	klog.Info("try sign etcd cert")
 	// 1. make sure etcd unit file is exist in the whole process
 	etcd := a.NewEtcd(a.req)
-	state := etcd.ReadClusterStateConfig()
+	err := etcd.WaitEndpoints(advertise(etcd.me, "2379"), 10*time.Second)
+	if err == nil {
+		klog.Infof("etcd already running")
+		return nil
+	}
+	//state := etcd.ReadClusterStateConfig()
+	state := "new"
 	klog.Infof("read local etcd cluster state: [%v]", state)
 	if err := etcd.LoadOrSign(a.req); err != nil {
 		return fmt.Errorf("sign: %s", err.Error())
 	}
-	err := etcd.FlushEtcdContent(a.req, a.host.Arch(), state)
+	err = etcd.FlushEtcdContent(a.req, a.host.Arch(), state)
 	if err != nil {
 		return fmt.Errorf("flush etcd content file %s: %s", ETCD_UNIT_FILE, err.Error())
 	}
@@ -130,7 +136,7 @@ func (a *etcd) Ensure(ctx context.Context) error {
 		return fmt.Errorf("systecmctl enable etcd error,%s ", err.Error())
 	}
 
-	return etcd.WaitEndpoints(advertise(etcd.me, "2379"))
+	return etcd.WaitEndpoints(advertise(etcd.me, "2379"), 3*time.Minute)
 }
 
 func (a *etcd) Purge(ctx context.Context) error {
@@ -386,7 +392,7 @@ func (m *Etcd) Join() error {
 	if err != nil {
 		return fmt.Errorf("peer: %s", err.Error())
 	}
-	err = m.WaitEndpoints(memAdvertise(omems.Members))
+	err = m.WaitEndpoints(memAdvertise(omems.Members), 3*time.Minute)
 	if err != nil {
 		return fmt.Errorf("wait etcd ready: %s", err.Error())
 	}
@@ -574,11 +580,11 @@ func memAdvertise(mems []Member) string {
 	return strings.Join(addrs, ",")
 }
 
-func (m *Etcd) WaitEndpoints(endpints string) error {
+func (m *Etcd) WaitEndpoints(endpints string, dura time.Duration) error {
 	var (
 		err     error
 		cnt     = 0
-		timeout = time.After(3 * time.Minute)
+		timeout = time.After(dura)
 	)
 
 	for {

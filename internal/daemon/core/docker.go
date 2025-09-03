@@ -26,7 +26,6 @@ func NewLocalDockerMgr(stateMgr *vmStateMgr) (*LocalDockerMgr, error) {
 type LocalDockerMgr struct {
 	tskMgr   *taskMgr
 	stateMgr *vmStateMgr
-	//sshMgr   *sshutil.SSHMgr
 }
 
 func (mgr *LocalDockerMgr) Create(ctx context.Context, at string) error {
@@ -43,7 +42,7 @@ func (mgr *LocalDockerMgr) Create(ctx context.Context, at string) error {
 		version  = "1.6.28"
 		registry = "registry.cn-hangzhou.aliyuncs.com"
 	)
-	out, err := vm.SSH().RunCommand(at, getCmd(ActionInstall, version, registry))
+	out, err := vm.SSH().RunCommand(ctx, at, getCmd(ActionInstall, version, registry))
 	if err != nil {
 		return errors.Wrap(err, "run install docker command")
 	}
@@ -79,7 +78,7 @@ func (mgr *LocalDockerMgr) Destroy(ctx context.Context, at string) error {
 	)
 
 	_ = mgr.removeDockerContext(at)
-	out, err := vm.SSH().RunCommand(at, getCmd(ActionDestroy, version, registry))
+	out, err := vm.SSH().RunCommand(ctx, at, getCmd(ActionDestroy, version, registry))
 	if err != nil {
 		klog.Infof("command result: %s", string(out))
 		return errors.Wrap(err, "run destroy docker command")
@@ -186,7 +185,7 @@ func (mgr *LocalDockerMgr) removeDockerContext(name string) error {
 
 func setLocalBinary(ctx context.Context, bin string) error {
 	klog.Infof("try to install [%s] binary", bin)
-	switch runtime.GOOS {
+	switch strings.ToLower(runtime.GOOS) {
 	case "darwin":
 		return setDarwin(ctx, bin)
 	case "linux":

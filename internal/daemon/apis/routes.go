@@ -11,28 +11,38 @@ import (
 )
 
 func CoreRoute(ctx *core.Context) map[string]map[string]server.HandlerFunc {
-	vm := newVmHandler(ctx)
+	v := newVmHandler(ctx)
 	d := newDockerHandler(ctx)
+	k := newK8sHandler(ctx)
+	i := newImageHandler(ctx)
 	var r = map[string]map[string]server.HandlerFunc{
-		"GET": {
-			"/debug":                vm.debug,
-			"/api/v1/vm/{name}":     vm.getVm,
-			"/api/v1/vm":            vm.getVm,
-			"/api/v1/docker/{name}": d.get,
-			"/api/v1/docker":        d.get,
-		},
 		"PUT": {
-			"/api/v1/vm/start/{name}": vm.startVm,
-			"/api/v1/vm/stop/{name}":  vm.stopVm,
+			"/api/v1/vm/start/{name}":        v.startVm,
+			"/api/v1/vm/stop/{name}":         v.stopVm,
+			"/api/v1/k8s/redeploy/{name}":    k.redeploy,
+			"/api/v1/docker/redeploy/{name}": v.debug,
 		},
 		"POST": {
-			"/api/v1/vm/{name}":     vm.createVm,
-			"/api/v1/vm/run/{name}": vm.runVm,
 			"/api/v1/docker/{name}": d.create,
+			"/api/v1/k8s/{name}":    k.create,
+			"/api/v1/vm/run/{name}": v.runVm,
+			"/api/v1/vm/{name}":     v.createVm,
 		},
 		"DELETE": {
-			"/api/v1/vm/{name}":     vm.deleteVm,
 			"/api/v1/docker/{name}": d.destroy,
+			"/api/v1/k8s/{name}":    k.destroy,
+			"/api/v1/vm/{name}":     v.deleteVm,
+			"/api/v1/image/{name}":  i.delete,
+		},
+		"GET": {
+			"/api/v1/docker/{name}":     d.get,
+			"/api/v1/docker":            d.get,
+			"/api/v1/k8s/{name}":        k.get,
+			"/api/v1/k8s":               k.get,
+			"/debug":                    v.debug,
+			"/api/v1/vm/{name}":         v.getVm,
+			"/api/v1/vm":                v.getVm,
+			"/api/v1/image/pull/{name}": i.pull,
 		},
 	}
 	return r

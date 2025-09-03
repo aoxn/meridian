@@ -50,6 +50,7 @@ type File struct {
 	Location string            `yaml:"location" json:"location"` // REQUIRED
 	OS       string            `yaml:"os" json:"os"`
 	Arch     Arch              `yaml:"arch,omitempty" json:"arch,omitempty"`
+	Version  string            `yaml:"version,omitempty" json:"version,omitempty"`
 	Digest   digest.Digest     `yaml:"digest,omitempty" json:"digest,omitempty"`
 	Labels   map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
 }
