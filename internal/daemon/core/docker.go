@@ -237,6 +237,9 @@ case $arch in
 "x86_64")
 	arch=amd64
 	;;
+"aarch64")
+	arch=arm64
+	;;
 *)
         echo "unknown arch: ${arch} for ${OS}"; exit 1
         ;;

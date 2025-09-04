@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	api "github.com/aoxn/meridian/api/v1"
 	"github.com/aoxn/meridian/internal/tool/downloader"
 	"github.com/cheggaaa/pb/v3"
+	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 	"os"
 	"path"
-	"strings"
 )
 
 type Status struct {
@@ -128,41 +127,31 @@ func (m *image) load(machineUri string) (*Image, error) {
 }
 
 type PullOpt struct {
+	Location      string
+	Digest        digest.Digest
 	DownloadBar   *pb.ProgressBar
 	DecompressBar *pb.ProgressBar
 }
 
 func (m *image) Pull(ctx context.Context, name string, opt *PullOpt) error {
-	f := api.FindImage(name)
-	if f == nil {
-		return fmt.Errorf("unexpected image name: [%s]", name)
-	}
 	var err error
-	var location = f.Location
-	switch strings.ToLower(f.OS) {
-	case "darwin":
-		if f.Location == "" {
-			location, err = GetLatestRestoreImageURL()
-			if err != nil {
-				return errors.Wrapf(err, "failed to get latest supported macos restore image")
-			}
-		}
-	default:
+	if opt == nil {
+		return fmt.Errorf("empty location")
 	}
 
 	var downloadOpts = []downloader.Opt{
 		downloader.WithCache(),
 		downloader.WithDecompress(true),
-		downloader.WithDescription(fmt.Sprintf("%s (%s)", "guest vm image", path.Base(location))),
-		downloader.WithExpectedDigest(f.Digest),
+		downloader.WithDescription(fmt.Sprintf("%s (%s)", "guest vm image", path.Base(opt.Location))),
+		downloader.WithExpectedDigest(opt.Digest),
 	}
-	if opt != nil && opt.DownloadBar != nil {
+	if opt.DownloadBar != nil {
 		downloadOpts = append(downloadOpts, downloader.WithDownloadBar(opt.DownloadBar))
 	}
-	if opt != nil && opt.DecompressBar != nil {
+	if opt.DecompressBar != nil {
 		downloadOpts = append(downloadOpts, downloader.WithDecompressBar(opt.DecompressBar))
 	}
-	res, err := downloader.Download(ctx, "", location, downloadOpts...)
-	klog.Infof("pull image %s from %s with status: [%v]", name, location, res)
+	res, err := downloader.Download(ctx, "", opt.Location, downloadOpts...)
+	klog.Infof("pull image %s from %s with status: [%v]", name, opt.Location, res)
 	return err
 }

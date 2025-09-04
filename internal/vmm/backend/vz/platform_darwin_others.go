@@ -21,3 +21,7 @@ func newPlatformConfigMac(driver *backend.BaseDriver, image string) (vz.Platform
 func createInitialConfigMac(driver *backend.BaseDriver) (*vz.VirtualMachineConfiguration, error) {
 	return nil, fmt.Errorf("createInitialConfigMac, platform not supported for arch: %s/%s on darwin", runtime.GOOS, runtime.GOARCH)
 }
+
+func GetLatestRestoreImageURL() (string, error) {
+	return "", fmt.Errorf("unimplemented")
+}

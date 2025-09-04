@@ -110,13 +110,24 @@ func newMachine(name string, flags *createflag) (*v1.VirtualMachineSpec, error) 
 			spec.Video.Display = "default"
 		}
 		spec.OS = v1.OS(f.OS)
-		if string(f.Arch) != runtime.GOARCH {
+		if string(f.Arch) != myArch() {
 			return nil, fmt.Errorf("local arch %s does not match image arch %s", runtime.GOARCH, f.Arch)
 		}
 		spec.Arch = f.Arch
 		spec.Image = v1.ImageLocation{Name: flags.image}
 	}
 	return &spec, nil
+}
+
+func myArch() string {
+	switch runtime.GOARCH {
+	case "amd64":
+		return "x86_64"
+	case "arm64":
+		return "aarch64"
+	default:
+	}
+	return "x86_64"
 }
 
 // NewCommandCreate create resource

@@ -622,7 +622,7 @@ func setAcceptRange(in string, accept string) {
 	if err != nil {
 		klog.Errorf("downloadHTTP: failed to write accept-ranges header to %q: %v", in, err)
 	}
-	klog.V(5).Info("set accept-range file: %s", in)
+	klog.V(5).Infof("set accept-range file: %s", in)
 }
 
 func readAcceptRange(in string) bool {
@@ -648,6 +648,7 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 		acceptRanges = readAcceptRange(arLocation)
 	)
 
+	header["User-Agent"] = fmt.Sprintf("Safari/18615.3.12.11.%d", rand.Int())
 	if acceptRanges {
 		// 支持断点续传
 		f, err = os.OpenFile(
@@ -661,9 +662,8 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 		if err != nil {
 			return err
 		}
-		header["User-Agent"] = fmt.Sprintf("Safari/18615.3.12.11.%s", rand.Int())
 		header["Range"] = fmt.Sprintf("bytes=%d-", fileInfo.Size())
-		klog.V(5).Infof("download start from breaking point: %s", fileInfo.Size())
+		klog.V(5).Infof("download start from breaking point: %d", fileInfo.Size())
 	} else {
 		// 不支持断点续传
 		klog.V(5).Infof("download from groud up: clean up cache")
@@ -683,6 +683,7 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 	if err != nil {
 		return gerrors.Wrapf(err, "download with header")
 	}
+	defer resp.Body.Close()
 	if lastModified != "" {
 		lm := resp.Header.Get("Last-Modified")
 		if err := os.WriteFile(lastModified, []byte(lm), 0o644); err != nil {
@@ -697,7 +698,6 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 	}
 	setAcceptRange(arLocation, resp.Header.Get("Accept-Ranges"))
 
-	defer resp.Body.Close()
 	if bar == nil {
 		bar, err = New(resp.ContentLength)
 		if err != nil {

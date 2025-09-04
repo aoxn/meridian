@@ -147,7 +147,7 @@ meridian-guest: fmt vet
 	sudo cp -rf bin/meridian-guest.$(GOOS).$(GOARCH) /usr/local/bin/meridian-guest
 
 .PHONY: meridian-node
-meridian-node: fmt vet
+meridian-node: 
 	@echo Build meridian-node binary[$(GOOS)][$(GOARCH)].
 	GOOS=$(GOOS)                \
 	GOARCH=$(GOARCH)             \

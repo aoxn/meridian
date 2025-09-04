@@ -139,3 +139,7 @@ func newMacInstallPlatformCfg(driver *backend.BaseDriver, image string) (vz.Plat
 		vz.WithMacMachineIdentifier(machineIdentifier),
 	)
 }
+
+func GetLatestRestoreImageURL() (string, error) {
+	return vz.GetLatestSupportedMacOSRestoreImageURL()
+}

@@ -272,7 +272,6 @@ func (m *Machine) WaitStop(ctx context.Context, timeout time.Duration) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("timeout wait for vm stop")
 }
 
 func validatePid(pid int) (int, error) {

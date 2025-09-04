@@ -367,14 +367,13 @@ func (h *imageHandler) pull(r *http.Request, w http.ResponseWriter) int {
 		}
 		status := pull.Decode()
 		if status.Err != "" {
-			return httpJson(w, status)
+			return httpJsonDirect(w, status)
 		}
 		// write frame
 		data, _ := json.Marshal(status)
 		fmt.Fprintf(w, fmt.Sprintf("%s\n", string(data)))
 		flusher.Flush()
 	}
-	return httpJson(w, "unexpected reach")
 }
 
 func (h *imageHandler) delete(r *http.Request, w http.ResponseWriter) int {

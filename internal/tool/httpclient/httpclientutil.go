@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	gerrors "github.com/pkg/errors"
 	"io"
+	"k8s.io/klog/v2"
 	"net"
 	"net/http"
 )
@@ -41,7 +43,7 @@ func GetWithHeader(ctx context.Context, c *http.Client, url string, header map[s
 	}
 	resp, err := c.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, gerrors.Wrapf(err, "do http request")
 	}
 	if err := Successful(resp); err != nil {
 		resp.Body.Close()
@@ -110,6 +112,7 @@ func Successful(resp *http.Response) error {
 		return errors.New("nil response")
 	}
 	if resp.StatusCode/100 != 2 {
+		klog.Infof("http get with unexpected status code: %d", resp.StatusCode)
 		b, _ := readAtMost(resp.Body, HTTPStatusErrorBodyMaxLength)
 		return &HTTPStatusError{
 			StatusCode: resp.StatusCode,

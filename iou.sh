@@ -98,6 +98,9 @@ function setup::install_meridian() {
         </array>
         <key>RunAtLoad</key>
         <true/>
+	<!-- 一旦进程挂了立刻重启 -->
+        <key>KeepAlive</key>
+        <true/>
         <key>StandardErrorPath</key>
         <string>launchd.stderr.log</string>
         <key>StandardOutPath</key>
@@ -166,7 +169,7 @@ case $action in
             ;;
         *)
             setup::install_meridian
-            setup::install_meridian_node
+            #setup::install_meridian_node
         esac
         ;;
 esac

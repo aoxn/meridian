@@ -217,6 +217,13 @@ func (mgr *LocalVMMgr) Destroy(ctx context.Context, name string) error {
 	if vm == nil {
 		return nil
 	}
+	// if vm still in Created state, should cancel vm initialization first
+	if vm.machine.State == Created {
+		err := mgr.tskMgr.Terminate(ctx, InitializeVM, name)
+		if err != nil {
+			return errors.Wrapf(err, "terminate vm initialization process")
+		}
+	}
 	err := vm.stopVm(ctx)
 	if err != nil {
 		return errors.Wrapf(err, "destroy vm %s", name)
@@ -456,10 +463,9 @@ func (m *vmState) stopVm(ctx context.Context) error {
 		err = sdbx.Update(ctx, "vm/stop", m.name, m.machine)
 		if err != nil {
 			klog.Infof("stop remote host-vm: %s", err.Error())
-		} else {
-			// wait for pid gone
-			err = m.machine.WaitStop(ctx, 3*time.Minute)
 		}
+		// wait for pid gone
+		err = m.machine.WaitStop(ctx, 3*time.Minute)
 		finished <- err
 	}(ctx)
 
@@ -645,7 +651,7 @@ func newTaskMgr() *taskMgr {
 	mgr := &taskMgr{
 		mu:     &sync.RWMutex{},
 		notify: make(chan string),
-		tasks:  make(map[string]string),
+		tasks:  make(map[string]context.CancelFunc),
 	}
 	go mgr.loop()
 	return mgr
@@ -654,7 +660,7 @@ func newTaskMgr() *taskMgr {
 type taskMgr struct {
 	mu     *sync.RWMutex
 	notify chan string
-	tasks  map[string]string
+	tasks  map[string]context.CancelFunc
 	class  map[string]func(ctx context.Context, state *vmState) error
 }
 
@@ -682,13 +688,49 @@ func (mgr *taskMgr) Send(class string, name string, tskFn tskFn) error {
 	if ok {
 		return fmt.Errorf("task already exists: %s", key)
 	}
-	mgr.tasks[key] = key
-	go func(key string) {
-		err := tskFn(context.TODO())
+	ctx, cancelFn := context.WithCancel(context.TODO())
+	mgr.tasks[key] = cancelFn
+	go func(ctx context.Context, key string) {
+		err := tskFn(ctx)
 		if err != nil {
 			klog.Errorf("[%s]run task error: %s", key, err.Error())
 		}
 		mgr.notify <- key
-	}(key)
+	}(ctx, key)
 	return nil
+}
+
+func (mgr *taskMgr) Terminate(ctx context.Context, class string, name string) error {
+	var cancelCtx = func() {
+		mgr.mu.Lock()
+		defer mgr.mu.Unlock()
+		var key = fmt.Sprintf("%s-%s", class, name)
+		cancelFn, ok := mgr.tasks[key]
+		if !ok {
+			return
+		}
+		cancelFn()
+	}
+
+	cancelCtx()
+
+	var terminated = func() bool {
+		mgr.mu.Lock()
+		defer mgr.mu.Unlock()
+		var key = fmt.Sprintf("%s-%s", class, name)
+		_, ok := mgr.tasks[key]
+		return !ok
+	}
+
+	tick := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context canceld: %s/%s", class, name)
+		case <-tick.C:
+		}
+		if terminated() {
+			return nil
+		}
+	}
 }

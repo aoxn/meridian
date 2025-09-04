@@ -98,3 +98,28 @@ func httpJsonCode(w http.ResponseWriter, v interface{}, code int) int {
 	}
 	return code
 }
+
+func httpJsonDirect(w http.ResponseWriter, v interface{}) int {
+	var text string
+	code := http.StatusOK
+	switch v.(type) {
+	case error:
+		text = v.(error).Error()
+		code = http.StatusInternalServerError
+	case string:
+		text = v.(string)
+	default:
+		resp, err := json.Marshal(v)
+		if err != nil {
+			text = err.Error()
+			code = http.StatusInternalServerError
+			break
+		}
+		text = string(resp)
+	}
+	_, err := io.Copy(w, bytes.NewBuffer([]byte(text)))
+	if err != nil {
+		klog.Errorf("httpJson copy response: %s", err.Error())
+	}
+	return code
+}

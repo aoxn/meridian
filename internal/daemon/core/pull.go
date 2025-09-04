@@ -3,9 +3,13 @@ package core
 import (
 	"context"
 	"fmt"
+	v1 "github.com/aoxn/meridian/api/v1"
 	"github.com/aoxn/meridian/internal/tool/downloader"
+	"github.com/aoxn/meridian/internal/vmm/backend/vz"
 	"github.com/aoxn/meridian/internal/vmm/meta"
+	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
+	"strings"
 	"sync"
 	"time"
 )
@@ -29,6 +33,23 @@ func (img *LocalImageMgr) Pull(name string) (*Pulling, error) {
 	defer img.mu.Unlock()
 	pull, ok := img.pulling[name]
 	if !ok {
+		i := v1.FindImage(name)
+		if i == nil {
+			return nil, fmt.Errorf("image %s not found", name)
+		}
+		var (
+			err      error
+			location = i.Location
+		)
+		if strings.ToLower(i.OS) == "darwin" {
+			location, err = vz.GetLatestRestoreImageURL()
+			if err != nil {
+				return nil, errors.Wrapf(err, "get latest macos restore image url")
+			}
+		}
+		if location == "" {
+			return nil, fmt.Errorf("unexpected empty image location for %s", name)
+		}
 		dBar, err := downloader.New(0)
 		if err != nil {
 			return nil, err
@@ -39,6 +60,8 @@ func (img *LocalImageMgr) Pull(name string) (*Pulling, error) {
 		}
 		pull = &Pulling{
 			PullOption: &meta.PullOpt{
+				Location:      location,
+				Digest:        i.Digest,
 				DecompressBar: dBar,
 				DownloadBar:   pBar,
 			},

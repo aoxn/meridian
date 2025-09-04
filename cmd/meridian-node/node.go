@@ -6,7 +6,6 @@ import (
 	"github.com/aoxn/meridian"
 	v1 "github.com/aoxn/meridian/api/v1"
 	"github.com/aoxn/meridian/cmd/common"
-	"github.com/aoxn/meridian/cmd/meridian/command"
 	"github.com/aoxn/meridian/internal/node"
 	"github.com/aoxn/meridian/internal/node/block/kubeadm"
 	"github.com/aoxn/meridian/internal/tool"
@@ -31,7 +30,6 @@ func NewCommandHost() *cobra.Command {
 	cmd.AddCommand(NewCommandVersion())
 	cmd.AddCommand(NewCommandDestroy())
 	cmd.AddCommand(NewCommandCreate())
-	cmd.AddCommand(command.NewCommandInstall())
 	return cmd
 }
 func NewCommandVersion() *cobra.Command {
