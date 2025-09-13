@@ -84,17 +84,22 @@ func PullImage(name string) error {
 	defer bar.Finish()
 	scanner := bufio.NewScanner(r)
 	klog.Infof("pulling image: [%s]", name)
+	var (
+		lastErr  string
+		complete = false
+	)
 	for scanner.Scan() {
-		//		klog.Infof("scan text: %s", scanner.Text())
 		var data meta.Status
 		err := json.Unmarshal([]byte(scanner.Text()), &data)
 		if err != nil {
 			return err
 		}
-		if data.Err != "" {
+		lastErr = data.Err
+		if lastErr != "" {
 			if strings.Contains(data.Err, "PullComplete") {
 				bar.SetTotal(data.Data[0].Total)
 				bar.SetCurrent(data.Data[0].Current)
+				complete = true
 				break
 			}
 			klog.Errorf("server responed: %s", data.Err)
@@ -105,16 +110,10 @@ func PullImage(name string) error {
 		bar.SetTotal(data.Data[0].Total)
 		bar.SetCurrent(data.Data[0].Current)
 	}
-
-	img := meta.Image{
-		Name:     name,
-		Arch:     string(f.Arch),
-		OS:       f.OS,
-		Version:  f.Version,
-		Labels:   f.Labels,
-		Location: f.Location,
+	if !complete {
+		return fmt.Errorf("interrupted with last error: %s", lastErr)
 	}
-	return backend.Image().Create(&img)
+	return nil
 }
 
 func getImage() ([]*meta.Image, error) {

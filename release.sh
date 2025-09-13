@@ -144,6 +144,7 @@ case "$1" in
 "meridian-guest")
 	release::meridian_target "meridian-guest" "linux" "amd64"
 	release::meridian_target "meridian-guest" "linux" "arm64"
+	release::meridian_target "meridian-guest" "darwin" "arm64"
 	;;
 "help")
 	echo "release.sh [ binary | script | universal | meridia | meridian-node | meridian-guest ]"

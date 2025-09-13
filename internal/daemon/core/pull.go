@@ -41,7 +41,7 @@ func (img *LocalImageMgr) Pull(name string) (*Pulling, error) {
 			err      error
 			location = i.Location
 		)
-		if strings.ToLower(i.OS) == "darwin" {
+		if strings.ToLower(i.OS) == "darwin" && location == "" {
 			location, err = vz.GetLatestRestoreImageURL()
 			if err != nil {
 				return nil, errors.Wrapf(err, "get latest macos restore image url")
@@ -70,8 +70,7 @@ func (img *LocalImageMgr) Pull(name string) (*Pulling, error) {
 		img.pulling[name] = pull
 		go func(pull *Pulling) {
 			defer img.remove(name)
-			err := img.backend.Image().Pull(context.TODO(), name, pull.PullOption)
-			pull.err = err
+			pull.err = img.backend.Image().Pull(context.TODO(), name, pull.PullOption)
 			pull.complete = true
 			klog.Errorf("pull image [%s] complete: %v", name, err)
 		}(pull)
@@ -130,11 +129,8 @@ func (p *Pulling) Wait(ctx context.Context) error {
 		default:
 		}
 		klog.Infof("debug waiting pull:  %+v,  %+v", p.err, p.complete)
-		if p.err != nil {
-			return p.err
-		}
 		if p.complete {
-			return nil
+			return p.err
 		}
 		time.Sleep(2 * time.Second)
 	}

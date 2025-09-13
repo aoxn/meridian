@@ -10,13 +10,14 @@ import (
 	"github.com/aoxn/meridian/internal/vmm/backend"
 	"github.com/docker/go-units"
 	gerrors "github.com/pkg/errors"
+	"k8s.io/klog/v2"
 	"os"
 	"path"
 	"path/filepath"
 	"time"
 )
 
-func installVm(ctx context.Context, vm *vz.VirtualMachine, image string) error {
+func installVm(ctx context.Context, name string, vm *vz.VirtualMachine, image string, dir string) error {
 	installer, err := vz.NewMacOSInstaller(vm, image)
 	if err != nil {
 		return gerrors.Wrap(err, "failed to create a new macOS installer")
@@ -26,18 +27,22 @@ func installVm(ctx context.Context, vm *vz.VirtualMachine, image string) error {
 	defer cancel()
 
 	go func() {
-		ticker := time.NewTicker(500 * time.Millisecond)
+		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
-				fmt.Println("install has been cancelled")
+				klog.Errorf("install has been cancelled: %s", name)
 				return
 			case <-installer.Done():
-				fmt.Println("install has been completed")
+				err = setDiskInitialized(dir)
+				if err != nil {
+					klog.Errorf("failed to set the disk initialized: %v", err)
+				}
+				klog.Infof("install has completed")
 				return
 			case <-ticker.C:
-				fmt.Printf("install: %.3f%%\r", installer.FractionCompleted()*100)
+				klog.Infof("[%s]macos installation progress: %.1f%%\r", name, installer.FractionCompleted()*100)
 			}
 		}
 	}()
@@ -103,7 +108,7 @@ func save(data []byte, path string) error {
 func newMacInstallPlatformCfg(driver *backend.BaseDriver, image string) (vz.PlatformConfiguration, error) {
 	restoreImage, err := vz.LoadMacOSRestoreImageFromPath(image)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load restore image: %w", err)
+		return nil, fmt.Errorf("failed to load restore image:[%s] %w", image, err)
 	}
 	macOSConfiguration := restoreImage.MostFeaturefulSupportedConfiguration()
 
@@ -142,4 +147,18 @@ func newMacInstallPlatformCfg(driver *backend.BaseDriver, image string) (vz.Plat
 
 func GetLatestRestoreImageURL() (string, error) {
 	return vz.GetLatestSupportedMacOSRestoreImageURL()
+}
+
+func GetMacGDC() (vz.GraphicsDeviceConfiguration, error) {
+	graphicsDeviceConfiguration, err := vz.NewMacGraphicsDeviceConfiguration()
+	if err != nil {
+		return nil, err
+	}
+	scanoutConfiguration, err := vz.NewMacGraphicsDisplayConfiguration(1920, 1200, 80)
+	if err != nil {
+		return nil, err
+	}
+	graphicsDeviceConfiguration.SetDisplays(scanoutConfiguration)
+
+	return graphicsDeviceConfiguration, nil
 }

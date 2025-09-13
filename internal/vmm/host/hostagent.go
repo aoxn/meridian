@@ -19,7 +19,6 @@ import (
 	"github.com/aoxn/meridian/internal/vmm/forward"
 	"github.com/aoxn/meridian/internal/vmm/host/event"
 	"github.com/aoxn/meridian/internal/vmm/sshutil"
-	"io"
 	"k8s.io/klog/v2"
 	"net"
 	"os"
@@ -38,15 +37,16 @@ import (
 
 type HostAgent struct {
 	//vm      *model.Instance
-	vmMeta  *meta.Machine
-	ssh     *sshutil.SSHMgr
-	ci      *cidata.CloudInit
-	driver  backend.Driver
-	connect *connectivity.Connectivity
+	vmMeta   *meta.Machine
+	ssh      *sshutil.SSHMgr
+	bootDisk cidata.BootDisk
+	driver   backend.Driver
+	connect  *connectivity.Connectivity
 
 	onClose []func() error // LIFO
 
 	guestPort int
+	signalCh  chan os.Signal
 
 	clientMu sync.RWMutex
 
@@ -63,12 +63,16 @@ type Opt func(*options) error
 // New creates the HostAgent.
 //
 // stdout is for emitting JSON lines of Events.
-func New(vmMeta *meta.Machine, stdout io.Writer, opts ...Opt) (*HostAgent, error) {
+func New(vmMeta *meta.Machine, signal chan os.Signal, opts ...Opt) (*HostAgent, error) {
 	var o options
 	for _, f := range opts {
 		if err := f(&o); err != nil {
 			return nil, err
 		}
+	}
+
+	if vmMeta == nil {
+		return nil, errors.New("vmMeta is nil")
 	}
 
 	newBackend := func() backend.Driver {
@@ -88,11 +92,19 @@ func New(vmMeta *meta.Machine, stdout io.Writer, opts ...Opt) (*HostAgent, error
 	}
 	driver := newBackend()
 	sshMgr := sshutil.NewSSHMgr("127.0.0.1", meta.Local.Config().Dir())
+	var bootDisk cidata.BootDisk
+	switch strings.ToLower(string(vmMeta.Spec.OS)) {
+	case "darwin":
+		bootDisk = cidata.NewPreBoot(vmMeta, sshMgr)
+	default:
+		bootDisk = cidata.NewCloudInit(vmMeta, sshMgr)
+	}
 	a := &HostAgent{
 		vmMeta:            vmMeta,
-		ci:                cidata.NewCloudInit(vmMeta, sshMgr),
+		bootDisk:          bootDisk,
 		connect:           connectivity.NewConnectivity(forward.NewForwardMgr(), driver, vmMeta),
 		ssh:               sshMgr,
+		signalCh:          signal,
 		guestPort:         10443,
 		driver:            driver,
 		guestAgentAliveCh: make(chan struct{}),
@@ -111,7 +123,7 @@ func (ha *HostAgent) Run(ctx context.Context) error {
 		ha.emitEvent(ctx, exitingEv)
 	}()
 	vmInfo := ha.vmMeta.Spec
-	go ha.HealthyTick(ctx)
+
 	err := ha.waitOnDisk()
 	if err != nil {
 		return err
@@ -203,19 +215,14 @@ func (ha *HostAgent) waitOnDisk() error {
 }
 
 func (ha *HostAgent) GenDisk(ctx context.Context) error {
-	err := ha.driver.CreateDisk(ctx)
+	err := ha.EnsureCIISO(ctx)
 	if err != nil {
-		return err
+		return gerrors.Wrapf(err, "generate cloud-init iso image")
 	}
-	return ha.EnsureCIISO(ctx)
+	return ha.driver.CreateDisk(ctx)
 }
 
 func (ha *HostAgent) EnsureCIISO(ctx context.Context) error {
-	switch strings.ToLower(string(ha.vmMeta.Spec.OS)) {
-	case "darwin":
-		return nil // darwin do not install guest
-	default:
-	}
 	vmInfo := ha.vmMeta.Spec
 
 	extracted := path.Join(ha.vmMeta.Dir(), "bin")
@@ -242,7 +249,7 @@ func (ha *HostAgent) EnsureCIISO(ctx context.Context) error {
 		klog.Infof("download guest binary: [%s][%s][%s]", f.Arch, f.Location, res.Status)
 	}
 
-	return ha.ci.GenCIISO()
+	return ha.bootDisk.CreateBootDisk()
 }
 
 func (ha *HostAgent) startRoutinesAndWait(ctx context.Context, errCh chan error) error {
@@ -273,7 +280,7 @@ func (ha *HostAgent) startRoutinesAndWait(ctx context.Context, errCh chan error)
 				klog.Errorf("an error during shutting down the host agent: %s", closeErr)
 			}
 			return driverErr
-		case <-ctx.Done():
+		case <-ha.signalCh:
 			klog.Info("context canceled, shutting down the host agent")
 			if closeErr := ha.close(); closeErr != nil {
 				klog.Errorf("an error during shutting down the host agent: %s", closeErr)
@@ -381,18 +388,6 @@ func (ha *HostAgent) Serve(ctx context.Context) {
 		klog.Errorf("failed to start the damon: %s", err)
 	}
 	select {}
-}
-
-func (ha *HostAgent) HealthyTick(ctx context.Context) {
-	tick := time.NewTicker(15 * time.Second)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-tick.C:
-			_ = ha.vmMeta.SavePID()
-		}
-	}
 }
 
 type sandboxHandler struct {

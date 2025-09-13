@@ -8,6 +8,7 @@ import (
 	"fmt"
 	v1 "github.com/aoxn/meridian/api/v1"
 	"github.com/cheggaaa/pb/v3"
+	"github.com/docker/go-units"
 	"github.com/mattn/go-isatty"
 	gerrors "github.com/pkg/errors"
 	"io"
@@ -293,9 +294,6 @@ func Download(ctx context.Context, local, remote string, opts ...Opt) (*Result, 
 			ValidatedDigest: o.expectedDigest != "",
 		}
 		return res, nil
-	}
-	if err := os.RemoveAll(shad); err != nil {
-		return nil, err
 	}
 	if err := os.MkdirAll(shad, 0o755); err != nil {
 		return nil, err
@@ -614,25 +612,6 @@ func validateLocalFileDigest(localPath string, expectedDigest digest.Digest) err
 	return nil
 }
 
-func setAcceptRange(in string, accept string) {
-	if accept == "" {
-		return
-	}
-	err := os.WriteFile(in, []byte(accept), 0o644)
-	if err != nil {
-		klog.Errorf("downloadHTTP: failed to write accept-ranges header to %q: %v", in, err)
-	}
-	klog.V(5).Infof("set accept-range file: %s", in)
-}
-
-func readAcceptRange(in string) bool {
-	_, err := os.Stat(in)
-	if err != nil {
-		return false
-	}
-	return true
-}
-
 func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url, description string, expectedDigest digest.Digest, bar *pb.ProgressBar) error {
 	if localPath == "" {
 		return fmt.Errorf("downloadHTTP: got empty localPath")
@@ -640,16 +619,20 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 	klog.V(5).Infof("downloading: [%q] -> [%q]", url, localPath)
 
 	var (
-		locaTmp      = localPath + ".tmp"
-		arLocation   = localPath + ".accept-ranges"
-		err          error
-		f            *os.File
-		header       = map[string]string{}
-		acceptRanges = readAcceptRange(arLocation)
+		current int64 = 0
+		locaTmp       = localPath + ".tmp"
+		err     error
+		f       *os.File
+		header  = map[string]string{}
 	)
 
 	header["User-Agent"] = fmt.Sprintf("Safari/18615.3.12.11.%d", rand.Int())
-	if acceptRanges {
+
+	resume, err := supportResume(url, header)
+	if err != nil {
+		return gerrors.Wrapf(err, "downloadHTTP: test accept range %q", url)
+	}
+	if resume {
 		// 支持断点续传
 		f, err = os.OpenFile(
 			locaTmp, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
@@ -662,8 +645,9 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 		if err != nil {
 			return err
 		}
+		current = fileInfo.Size()
 		header["Range"] = fmt.Sprintf("bytes=%d-", fileInfo.Size())
-		klog.V(5).Infof("download start from breaking point: %d", fileInfo.Size())
+		klog.V(5).Infof("download start from breaking point: %d/%s", fileInfo.Size(), units.HumanSize(float64(current)))
 	} else {
 		// 不支持断点续传
 		klog.V(5).Infof("download from groud up: clean up cache")
@@ -696,20 +680,20 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 			return err
 		}
 	}
-	setAcceptRange(arLocation, resp.Header.Get("Accept-Ranges"))
-
+	var total = current + resp.ContentLength
 	if bar == nil {
-		bar, err = New(resp.ContentLength)
+		bar, err = New(total)
 		if err != nil {
 			return err
 		}
 		if HideProgress {
 			hideBar(bar)
 		}
-	} else {
-		bar.SetTotal(resp.ContentLength)
 	}
-
+	bar.SetTotal(total)
+	if resume {
+		bar.SetCurrent(current)
+	}
 	writers := []io.Writer{f}
 	var digester digest.Digester
 	if expectedDigest != "" {
@@ -755,51 +739,23 @@ func downloadHTTP(ctx context.Context, localPath, lastModified, contentType, url
 	return os.Rename(locaTmp, localPath)
 }
 
-//
-//// downloadRestoreImage resumable downloads macOS restore image (ipsw) file.
-//func downloadRestoreImage(ctx context.Context, url string, destPath string) (*progress.Reader, error) {
-//	// open or create
-//	f, err := os.OpenFile(destPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	fileInfo, err := f.Stat()
-//	if err != nil {
-//		f.Close()
-//		return nil, err
-//	}
-//
-//	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-//	if err != nil {
-//		f.Close()
-//		return nil, err
-//	}
-//
-//	// Content-Range Accept-Ranges: bytes
-//	req.Header.Add("User-Agent", "github.com/Code-Hex/vz")
-//	req.Header.Add("Range", fmt.Sprintf("bytes=%d-", fileInfo.Size()))
-//
-//	resp, err := http.DefaultClient.Do(req)
-//	if err != nil {
-//		f.Close()
-//		return nil, err
-//	}
-//
-//	if 200 > resp.StatusCode || resp.StatusCode >= 300 {
-//		f.Close()
-//		resp.Body.Close()
-//		return nil, fmt.Errorf("unexpected http status code: %d", resp.StatusCode)
-//	}
-//
-//	reader := progress.NewReader(resp.Body, resp.ContentLength, fileInfo.Size())
-//
-//	go func() {
-//		defer f.Close()
-//		defer resp.Body.Close()
-//		_, err := io.Copy(f, reader)
-//		reader.Finish(err)
-//	}()
-//
-//	return reader, nil
-//}
+// supportResume 返回 true 表示 Apple CDN 支持断点续传
+func supportResume(url string, header map[string]string) (bool, error) {
+	var client = http.DefaultClient
+	// 1. 发 Range 试探
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Range", "bytes=0-0")
+	for k, v := range header {
+		req.Header.Set(k, v)
+	}
+	rangeResp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	rangeResp.Body.Close()
+	klog.V(5).Infof("remote server break point infomation: HttpCode=[%d], Header=[ContentLength=%s]/[AcceptRange=%s]",
+		rangeResp.StatusCode, rangeResp.Header.Get("Content-Length"), rangeResp.Header.Get("Accept-Ranges"))
+	return rangeResp.StatusCode == http.StatusPartialContent ||
+		rangeResp.Header.Get("Accept-Ranges") != "" ||
+		rangeResp.Header.Get("Content-Range") != "", nil
+}

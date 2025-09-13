@@ -139,7 +139,7 @@ mlx86: fmt vet
 	codesign --entitlements vz.entitlements -s - bin/meridian.linux.x86_64 || true
 
 .PHONY: meridian-guest
-meridian-guest: fmt vet
+meridian-guest:
 	@echo Build meridian-guest binary[$(GOOS)][$(GOARCH)].
 	GOOS=$(GOOS)                \
 	GOARCH=$(GOARCH)             \
@@ -177,6 +177,7 @@ meridiand: fmt
 	GOOS=$(GOOS)                \
 	GOARCH=$(GOARCH)             \
 	CGO_ENABLED=1 go build -ldflags "-X github.com/aoxn/meridian.Version=$(TAG) -s -w" -o bin/meridiand.$(GOOS).$(GOARCH) cmd/meridiand/daemon.go
+	codesign --entitlements vz.entitlements -s - bin/meridiand.$(GOOS).$(GOARCH) || true
 	sudo cp -rf bin/meridiand.$(GOOS).$(GOARCH) /usr/local/bin/meridiand
 
 

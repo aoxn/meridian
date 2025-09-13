@@ -54,25 +54,15 @@ type Context struct {
 	k8sMgr    *LocalK8sMgr
 }
 
-func (ctx *Context) Backend() meta.Backend {
-	return ctx.meta
-}
+func (ctx *Context) Backend() meta.Backend { return ctx.meta }
 
-func (ctx *Context) VMMgr() *LocalVMMgr {
-	return ctx.vmMgr
-}
+func (ctx *Context) VMMgr() *LocalVMMgr { return ctx.vmMgr }
 
-func (ctx *Context) ImageMgr() *LocalImageMgr {
-	return ctx.imageMgr
-}
+func (ctx *Context) ImageMgr() *LocalImageMgr { return ctx.imageMgr }
 
-func (ctx *Context) DockerMgr() *LocalDockerMgr {
-	return ctx.dockerMgr
-}
+func (ctx *Context) DockerMgr() *LocalDockerMgr { return ctx.dockerMgr }
 
-func (ctx *Context) K8sMgr() *LocalK8sMgr {
-	return ctx.k8sMgr
-}
+func (ctx *Context) K8sMgr() *LocalK8sMgr { return ctx.k8sMgr }
 
 func NewLocalVMMgr(backend meta.Backend) (*LocalVMMgr, error) {
 	stateMgr, err := newVMStateMgr(backend)
@@ -199,6 +189,14 @@ func (mgr *LocalVMMgr) Start(ctx context.Context, name string) error {
 	}
 	switch vm.machine.State {
 	case Running, Stopping, Starting:
+		_, err := vm.machine.LoadPID()
+		if err != nil {
+			if !strings.Contains(err.Error(), "NotFound") {
+				return errors.Wrapf(err, "find vm by pid")
+			}
+			// not found, start
+			return vm.runVm(context.TODO())
+		}
 		return fmt.Errorf("UnexpectedCurrentState: %s=[%s], can not run", name, vm.machine.State)
 	case Created, Error, Stopped:
 		// can start
@@ -228,7 +226,7 @@ func (mgr *LocalVMMgr) Destroy(ctx context.Context, name string) error {
 	if err != nil {
 		return errors.Wrapf(err, "destroy vm %s", name)
 	}
-	err = vm.machine.Destroy()
+	err = vm.machine.Destroy(ctx)
 	if err != nil {
 		return errors.Wrapf(err, "destroy machine %s", name)
 	}
@@ -256,13 +254,13 @@ func (mgr *LocalVMMgr) initialVm(ctx context.Context, state *vmState) error {
 	klog.Infof("start to initialize vm: %s", vm.Name)
 	state.restStage(StatePulling, "pulling image: [%s]", img.Name)
 	pull, err := mgr.imgMgr.Pull(img.Name)
-	if err != nil && !strings.Contains(err.Error(), "PullComplete") {
+	if err != nil {
 		state.addStage(Error, "pull image error: [%s], %s", img.Name, err.Error())
 		return fmt.Errorf("[%s]pull image %s failed: %v", vm.Name, img.Name, err)
 	}
 	// todo wait image pull
 	err = pull.Wait(ctx)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "PullComplete") {
 		return errors.Wrapf(err, "wait for image pulling")
 	}
 	host, err := hostagent.New(vm, nil)
@@ -485,7 +483,7 @@ func (m *vmState) stopVm(ctx context.Context) error {
 			return fmt.Errorf("vm stop err: %s", errMsg.Error())
 		}
 	}
-	err = m.machine.Stop()
+	err = m.machine.Stop(ctx)
 	if err != nil {
 		m.setState(Error, "stop vm error: %s", err.Error())
 		return err
@@ -530,75 +528,52 @@ func (m *vmState) run(ctx context.Context) error {
 		begin = time.Now() // used for logrus propagation
 		vm    = m.machine
 	)
-	pid, err := vm.LoadPID()
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return errors.Wrapf(err, "load pid %s error", vm.PIDFile())
-		}
-		klog.Infof("[%-10s]pid file not exist: [%s], %s", vm.Name, vm.PIDFile(), err.Error())
-	} else {
-		klog.Infof("[%-10s]got existing pid [%d]", vm.Name, pid.PID)
-	}
 
 	m.setState(Starting, "starting vm: %s", vm.Name)
 
-	runVm := func() error {
-		_ = os.MkdirAll(vm.Dir(), 0o700)
-		vmBin, err := vmBinaryPath()
+	pid, err := vm.LoadPID()
+	if err != nil {
+		// pid not exist
+		klog.Infof("[%-10s]read pid failed: [%s], %s", vm.Name, vm.PIDFile(), err.Error())
+		p, err := m.runDaemon(vm)
 		if err != nil {
 			return err
 		}
-		klog.Infof("boot vm from: %s", vmBin)
-		haStdoutPath := filepath.Join(vm.Dir(), v1.HostAgentStdoutLog)
-		haStderrPath := filepath.Join(vm.Dir(), v1.HostAgentStderrLog)
-		if err := os.RemoveAll(haStdoutPath); err != nil {
-			return err
-		}
-		if err := os.RemoveAll(haStderrPath); err != nil {
-			return err
-		}
-		haStdoutW, err := os.Create(haStdoutPath)
-		if err != nil {
-			return err
-		}
-		// no defer haStdoutW.Close()
-		haStderrW, err := os.Create(haStderrPath)
-		if err != nil {
-			return err
-		}
-		// no defer haStderrW.Close()
-		var args = []string{"start", m.name, "-v", "6"}
-		haCmd := exec.CommandContext(ctx, vmBin, args...)
-
-		haCmd.Stdin = strings.NewReader(tool.PrettyYaml(vm))
-		haCmd.Stdout = haStdoutW
-		haCmd.Stderr = haStderrW
-		haCmd.SysProcAttr = &syscall.SysProcAttr{
-			Setsid: true,
-		}
-		err = haCmd.Start()
-		if err != nil {
-			m.setState(Error, "run vm", err.Error())
-			return errors.Wrapf(err, "start vm %s error", vm.Name)
-		}
-
-		// 不需要 haCmd.Wait()， 让系统自然接管VMM进程。不然server进程停止会导致vm被回收。
-
-		klog.Infof("[%-10s]start vm: [%d], %s", vm.Name, pid.PID, strings.Join(append([]string{vmBin}, args...), " "))
-		return nil
-	}
-	if pid.PID == 0 || time.Now().After(pid.Stamp.Add(30*time.Second)) {
-		klog.Infof("[%-10s]pid not found or expired: [%s]", vm.Name, pid)
-		err = runVm()
-		if err != nil {
-
-			return errors.Wrapf(err, "start vm fail")
-		}
+		klog.Infof("[%-10s]virtual machine started: %d", vm.Name, p)
 	} else {
-		klog.Infof("[%-10s]virtual machine already started: wait at [pid=%d]", vm.Name, pid.PID)
+		klog.Infof("[%-10s] pid exist, [%d]", vm.Name, pid)
 	}
+
 	klog.Infof("[%-10s]vm started in %f(m)", vm.Name, time.Now().Sub(begin).Seconds())
 	return nil
+}
+
+func (m *vmState) runDaemon(vm *meta.Machine) (int, error) {
+	_ = os.MkdirAll(vm.Dir(), 0o700)
+	vmBin, err := vmBinaryPath()
+	if err != nil {
+		return 0, err
+	}
+	klog.Infof("boot vm from: %s", vmBin)
+	var cfg = path.Join(vm.Dir(), "config.mirror.yml")
+	err = os.WriteFile(
+		cfg, []byte(tool.PrettyYaml(vm)), 0755)
+	if err != nil {
+		return 0, err
+	}
+	var args = []string{"start", vm.Name, "-v", "6", "-c", cfg}
+	haCmd := exec.CommandContext(context.TODO(), vmBin, args...)
+	haCmd.Stdin = strings.NewReader(tool.PrettyYaml(vm))
+	haCmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+	err = haCmd.Start()
+	if err != nil {
+		return 0, errors.Wrapf(err, "start vm %s error", vm.Name)
+	}
+
+	klog.Infof("[%-10s]start vm: [%d], %s", vm.Name, os.Getpid(), strings.Join(append([]string{vmBin}, args...), " "))
+	return 0, haCmd.Wait()
 }
 
 func (m *vmState) waitVm(ctx context.Context, gaClient client.Interface) {

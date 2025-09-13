@@ -10,7 +10,7 @@ import (
 	"runtime"
 )
 
-func installVm(ctx context.Context, vm *vz.VirtualMachine, image string) error {
+func installVm(ctx context.Context, name string, vm *vz.VirtualMachine, image string, dir string) error {
 	return fmt.Errorf("installVm on darwin %s/%s not implemented", runtime.GOOS, runtime.GOARCH)
 }
 
@@ -24,4 +24,8 @@ func createInitialConfigMac(driver *backend.BaseDriver) (*vz.VirtualMachineConfi
 
 func GetLatestRestoreImageURL() (string, error) {
 	return "", fmt.Errorf("unimplemented")
+}
+
+func GetMacGDC() (vz.GraphicsDeviceConfiguration, error) {
+	return nil, fmt.Errorf("unimplemented")
 }

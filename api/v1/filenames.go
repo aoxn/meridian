@@ -23,9 +23,12 @@ const (
 // Filenames that may appear under an instance directory
 
 const (
+	DiskSize = 64 * 1024 * 1024 * 1024
+
 	MeridianYAMLFile     = "meridian.yaml"
 	LimaVersion          = "lima-version" // Lima version used to create instance
 	CIDataISO            = "cidata.iso"
+	CIDataDMG            = "cidata.dmg"
 	CIDataISODir         = "cidata"
 	BaseDisk             = "basedisk"
 	DiffDisk             = "diffdisk"

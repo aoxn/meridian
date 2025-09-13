@@ -1,26 +1,30 @@
 package cidata
 
 import (
+	"embed"
 	"fmt"
 	"github.com/aoxn/meridian/api/v1"
 	"github.com/aoxn/meridian/internal/vmm/meta"
 	"github.com/aoxn/meridian/internal/vmm/sshutil"
+	"github.com/diskfs/go-diskfs/filesystem/iso9660"
+	"github.com/pkg/errors"
 	"io"
 	"k8s.io/klog/v2"
 	"net"
 	"os"
-	"os/user"
 	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
-	"time"
-
-	"github.com/diskfs/go-diskfs/filesystem/iso9660"
 )
 
-func NewCloudInit(i *meta.Machine, sshmgr *sshutil.SSHMgr) *CloudInit {
+//go:embed cidata.TEMPLATE.d
+var ciDataFS embed.FS
+
+const ciFSRoot = "cidata.TEMPLATE.d"
+
+func NewCloudInit(i *meta.Machine, sshmgr *sshutil.SSHMgr) BootDisk {
 	return &CloudInit{ii: i, sshMgr: sshmgr}
 }
 
@@ -29,93 +33,59 @@ type CloudInit struct {
 	ii     *meta.Machine
 }
 
-func (i *CloudInit) GenCIISO() error {
-	u := &user.User{
-		Uid:      "1000",
-		Username: i.ii.Name,
-		HomeDir:  fmt.Sprintf("/home/%s", i.ii.Name),
-	}
-	var pubs []string
+func (i *CloudInit) CreateBootDisk() error {
 	pub, err := i.sshMgr.LoadPubKey()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "load public key for vm")
 	}
-	for _, p := range pub {
-		pubs = append(pubs, p.Content)
-		klog.Infof("append pubkey: %s", p.Content)
-	}
-
-	vmInfo := i.ii.Spec
-	args := TemplateArgs{
-		Name:       i.ii.Name,
-		User:       u,
-		VMType:     string(vmInfo.VMType),
-		TimeZone:   vmInfo.TimeZone,
-		SSHPubKeys: pubs,
-		MountType:  "virtiofs",
-		CACerts: CACerts{
-			RemoveDefaults: false,
-		},
-		Home: u.HomeDir,
-	}
-	for k, n := range vmInfo.Mounts {
-		mount := Mount{
-			MountPoint: n.MountPoint,
-			Type:       "virtiofs",
-			Tag:        fmt.Sprintf("mount%d", k),
-		}
-		if vmInfo.VMType == "vz" {
-			mount.Type = "virtiofs"
-		}
-		args.Mounts = append(args.Mounts, mount)
+	tplModel, err := NewTpl(i.ii, pub)
+	if err != nil {
+		return errors.Wrapf(err, "build init disk template")
 	}
 
-	for _, n := range vmInfo.Networks {
-		network := Network{
-			Interface:  "enp0s1",
-			MACAddress: n.MACAddress,
-			IpAddress:  n.Address,
-			IpGateway:  n.IpGateway,
-		}
-		args.Networks = append(args.Networks, network)
-	}
-	klog.Infof("network addresses: %+v", args.Networks[0])
-	// change instance id on every boot so network config will be processed again
-	args.IID = fmt.Sprintf("iid-%d", time.Now().Unix())
-
-	if err := ValidateTemplateArgs(args); err != nil {
-		return err
-	}
-
-	layout, err := ExecuteTemplate(args)
+	layout, err := tplModel.Build(&ciDataFS, ciFSRoot, ValidateTemplateArgs)
 	if err != nil {
 		return err
 	}
 
-	gfile := path.Join(i.ii.Dir(), "bin", fmt.Sprintf("meridian-guest.%s.%s", strings.ToLower(string(vmInfo.OS)), withArch(vmInfo.Arch)))
-	var guest io.ReadCloser
-	guest, err = os.Open(gfile)
+	bin, err := i.buildGuestBin()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to build guest binary reader")
 	}
-	defer guest.Close()
-	layout = append(layout, entry{
-		path:   "md-guest",
-		reader: guest,
-		closer: guest,
-	})
+	layout = append(layout, bin)
+
 	instDir := i.ii.Dir()
 	_ = ensurePath(instDir, true)
-	klog.Infof("write iso file path: %s", filepath.Join(instDir, v1.CIDataISO))
-	if args.VMType == string(v1.WSL2) {
-		layout = append(layout, entry{
-			path:   "ssh_authorized_keys",
-			reader: strings.NewReader(strings.Join(args.SSHPubKeys, "\n")),
+	klog.Infof("write iso file Path: %s", filepath.Join(instDir, v1.CIDataISO))
+	if tplModel.VMType == string(v1.WSL2) {
+		layout = append(layout, &Entry{
+			Path:   "ssh_authorized_keys",
+			reader: strings.NewReader(strings.Join(tplModel.SSHPubKeys, "\n")),
 		})
 		return writeDir(filepath.Join(instDir, "cidata"), layout)
 	}
 
 	return writeISO(filepath.Join(instDir, v1.CIDataISO), "cidata", layout)
+}
+
+func (i *CloudInit) buildGuestBin() (*Entry, error) {
+	vmInfo := i.ii.Spec
+	gfile := path.Join(
+		i.ii.Dir(), "bin",
+		fmt.Sprintf("meridian-guest.%s.%s",
+			strings.ToLower(string(vmInfo.OS)), withArch(vmInfo.Arch)),
+	)
+	var guest io.ReadCloser
+	guest, err := os.Open(gfile)
+	if err != nil {
+		return nil, err
+	}
+	entry := &Entry{
+		reader: guest,
+		closer: guest,
+		Path:   "md-guest",
+	}
+	return entry, nil
 }
 
 func withArch(arch v1.Arch) string {
@@ -134,9 +104,9 @@ func withArch(arch v1.Arch) string {
 	}
 }
 
-func writeDir(rootPath string, layout []entry) error {
-	slices.SortFunc(layout, func(a, b entry) int {
-		return strings.Compare(strings.ToLower(a.path), strings.ToLower(b.path))
+func writeDir(rootPath string, layout []*Entry) error {
+	slices.SortFunc(layout, func(a, b *Entry) int {
+		return strings.Compare(strings.ToLower(a.Path), strings.ToLower(b.Path))
 	})
 
 	err := os.RemoveAll(rootPath)
@@ -145,7 +115,7 @@ func writeDir(rootPath string, layout []entry) error {
 	}
 
 	for _, f := range layout {
-		dir := path.Dir(f.path)
+		dir := path.Dir(f.Path)
 		if dir != "" && dir != "/" {
 			pathl := filepath.Join(rootPath, dir)
 			err := os.MkdirAll(pathl, 0o700)
@@ -157,7 +127,7 @@ func writeDir(rootPath string, layout []entry) error {
 		if err != nil {
 			return err
 		}
-		err = os.WriteFile(filepath.Join(rootPath, f.path), buf, 0o700)
+		err = os.WriteFile(filepath.Join(rootPath, f.Path), buf, 0o700)
 		if err != nil {
 			return err
 		}
@@ -169,7 +139,7 @@ func writeDir(rootPath string, layout []entry) error {
 	return nil
 }
 
-func writeISO(isoPath, label string, layout []entry) error {
+func writeISO(isoPath, label string, layout []*Entry) error {
 	cleanUp(isoPath)
 
 	iso, err := os.Create(isoPath)
@@ -184,7 +154,7 @@ func writeISO(isoPath, label string, layout []entry) error {
 		return err
 	}
 	if runtime.GOOS == "windows" {
-		// go-embed unfortunately needs unix path
+		// go-embed unfortunately needs unix Path
 		workdir = filepath.ToSlash(workdir)
 	}
 
@@ -195,14 +165,14 @@ func writeISO(isoPath, label string, layout []entry) error {
 
 	// write to fs
 	for _, f := range layout {
-		dir := path.Dir(f.path)
+		dir := path.Dir(f.Path)
 		if dir != "" && dir != "/" {
 			err = fs.Mkdir(dir)
 			if err != nil {
 				return err
 			}
 		}
-		data, err := fs.OpenFile(f.path, os.O_CREATE|os.O_RDWR)
+		data, err := fs.OpenFile(f.Path, os.O_CREATE|os.O_RDWR)
 		if err != nil {
 			return err
 		}
@@ -213,7 +183,7 @@ func writeISO(isoPath, label string, layout []entry) error {
 		if f.closer != nil {
 			_ = f.closer.Close()
 		}
-		klog.V(6).Infof("debug generate cloud-init disk: write iso part, %s", f.path)
+		klog.V(6).Infof("debug generate cloud-init disk: write iso part, %s", f.Path)
 	}
 
 	finalizeOptions := iso9660.FinalizeOptions{
@@ -253,12 +223,6 @@ func cleanUp(name string) {
 	_ = os.RemoveAll(name)
 }
 
-type entry struct {
-	path   string
-	reader io.Reader
-	closer io.Closer
-}
-
 var netLookupIP = func(host string) []net.IP {
 	ips, err := net.LookupIP(host)
 	if err != nil {
@@ -267,4 +231,26 @@ var netLookupIP = func(host string) []net.IP {
 	}
 
 	return ips
+}
+
+func ValidateTemplateArgs(args *TemplateArgs) error {
+	if args.User.Username == "root" {
+		return errors.New("field User must not be \"root\"")
+	}
+	if args.User.Uid == "" {
+		return errors.New("field UID must not be 0")
+	}
+	if args.Home == "" {
+		return errors.New("field Home must be set")
+	}
+	if len(args.SSHPubKeys) == 0 {
+		return errors.New("field SSHPubKeys must be set")
+	}
+	for i, m := range args.Mounts {
+		f := m.MountPoint
+		if !path.IsAbs(f) {
+			return fmt.Errorf("field mounts[%d] must be absolute, got %q", i, f)
+		}
+	}
+	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	api "github.com/aoxn/meridian/api/v1"
 	"github.com/aoxn/meridian/internal/tool/downloader"
 	"github.com/cheggaaa/pb/v3"
 	"github.com/opencontainers/go-digest"
@@ -138,11 +139,15 @@ func (m *image) Pull(ctx context.Context, name string, opt *PullOpt) error {
 	if opt == nil {
 		return fmt.Errorf("empty location")
 	}
+	f := api.FindImage(name)
+	if f == nil {
+		return fmt.Errorf("image not found: %s", name)
+	}
 
 	var downloadOpts = []downloader.Opt{
 		downloader.WithCache(),
-		downloader.WithDecompress(true),
-		downloader.WithDescription(fmt.Sprintf("%s (%s)", "guest vm image", path.Base(opt.Location))),
+		downloader.WithDecompress(false),
+		downloader.WithDescription(fmt.Sprintf("%s (%s)", "Guest Vm Image", path.Base(opt.Location))),
 		downloader.WithExpectedDigest(opt.Digest),
 	}
 	if opt.DownloadBar != nil {
@@ -153,5 +158,18 @@ func (m *image) Pull(ctx context.Context, name string, opt *PullOpt) error {
 	}
 	res, err := downloader.Download(ctx, "", opt.Location, downloadOpts...)
 	klog.Infof("pull image %s from %s with status: [%v]", name, opt.Location, res)
-	return err
+	if err != nil {
+		return errors.Wrapf(err, "failed to pull image %s", name)
+	}
+	img := &Image{
+		Name:     name,
+		Digest:   opt.Digest,
+		OS:       f.OS,
+		Arch:     string(f.Arch),
+		Version:  f.Version,
+		Labels:   f.Labels,
+		Location: opt.Location,
+	}
+	// save image
+	return m.Update(img)
 }

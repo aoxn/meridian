@@ -8,6 +8,10 @@ function setup::env() {
     uid=$(id -u)
 
     os=$(uname|tr '[:upper:]' '[:lower:]')
+    if [[ "$os" != "darwin" ]];
+    then
+    	echo "only macos is supported for now"; exit 1
+    fi
     arch=$(uname -m|tr '[:upper:]' '[:lower:]')
     case $arch in
     "x86_64")
@@ -67,9 +71,9 @@ function setup::download() {
 
 function setup::install_meridian() {
 
-        setup::download $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz /tmp/meridian."${os}".${arch}.tar.gz
+    setup::download $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz /tmp/meridian."${os}".${arch}.tar.gz
 
-        setup::download $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz.sum /tmp/meridian."${os}".${arch}.tar.gz.sum
+    setup::download $server/bin/"${os}"/${arch}/${version}/meridian."${os}".${arch}.tar.gz.sum /tmp/meridian."${os}".${arch}.tar.gz.sum
 
     #md5sum -c /tmp/meridian.${os}.${arch}.tar.gz.sum
     tar xf /tmp/meridian."${os}".${arch}.tar.gz -C /tmp
@@ -143,10 +147,10 @@ EOF
 }
 
 function setup::install_meridian_node() {
-        setup::download $server/bin/"${os}"/${arch}/${version}/meridian-node."${os}".${arch}.tar.gz /tmp/meridian-node."${os}".${arch}.tar.gz
-    tar xf /tmp/meridian-node."${os}".${arch}.tar.gz -C /tmp
-    sudo mv -f /tmp/bin/meridian-node."${os}".${arch} /usr/local/bin/meridian-node
-    rm -rf /tmp/meridian-node."${os}".${arch}.tar.gz /tmp/meridian-node."${os}".${arch}.tar.gz.sum
+	setup::download $server/bin/"${os}"/${arch}/${version}/meridian-node."${os}".${arch}.tar.gz /tmp/meridian-node."${os}".${arch}.tar.gz
+    	tar xf /tmp/meridian-node."${os}".${arch}.tar.gz -C /tmp
+    	sudo mv -f /tmp/bin/meridian-node."${os}".${arch} /usr/local/bin/meridian-node
+    	rm -rf /tmp/meridian-node."${os}".${arch}.tar.gz /tmp/meridian-node."${os}".${arch}.tar.gz.sum
 }
 
 setup::env

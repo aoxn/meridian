@@ -40,7 +40,7 @@ var (
 // names to the fallback user as well, so the regex does not allow them.
 var regexUsername = regexp.MustCompile("^[a-z_][a-z0-9_-]*$")
 
-// regexPath detects valid Linux path.
+// regexPath detects valid Linux Path.
 var regexPath = regexp.MustCompile("^[/a-zA-Z0-9_-]+$")
 
 func LookupUser(name string) (User, error) {
@@ -166,7 +166,7 @@ func MdUser(warn bool) (*user.User, error) {
 					home = strings.Replace(home, drive, prefix, 1)
 				}
 				if !regexPath.MatchString(cache.u.HomeDir) {
-					warning := fmt.Sprintf("local home %q is not a valid Linux path (must match %q); using %q home instead",
+					warning := fmt.Sprintf("local home %q is not a valid Linux Path (must match %q); using %q home instead",
 						cache.u.HomeDir, regexPath.String(), home)
 					cache.warnings = append(cache.warnings, warning)
 					cache.u.HomeDir = home

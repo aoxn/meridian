@@ -3,6 +3,7 @@ package meta
 import (
 	"context"
 	"fmt"
+	"github.com/opencontainers/go-digest"
 	"os"
 	"path"
 )
@@ -102,6 +103,7 @@ type Image struct {
 	Arch     string            `json:"arch"`
 	Version  string            `json:"version"`
 	Location string            `json:"location"`
+	Digest   digest.Digest     `json:"digest"`
 	Labels   map[string]string `json:"labels"`
 }
 

@@ -5,22 +5,32 @@ import (
 	"flag"
 	"fmt"
 	"github.com/aoxn/meridian"
+	v1 "github.com/aoxn/meridian/api/v1"
 	hostagent "github.com/aoxn/meridian/internal/vmm/host"
 	"github.com/aoxn/meridian/internal/vmm/meta"
 	"github.com/ghodss/yaml"
+	"github.com/pkg/errors"
+	godaemon "github.com/sevlyar/go-daemon"
 	"github.com/spf13/cobra"
-	"io"
-	"os"
-	"os/signal"
-	"runtime"
-	"syscall"
 
+	"io"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"syscall"
 )
 
+func init() {
+	runtime.LockOSThread()
+	klog.Infof("run gui with lock thread: init")
+}
+
 func Start(args []string, cfgfile string) error {
+
 	var (
 		data []byte
 		err  error
@@ -31,44 +41,47 @@ func Start(args []string, cfgfile string) error {
 		data, err = os.ReadFile(cfgfile)
 	} else {
 		data, err = io.ReadAll(os.Stdin)
-		err = yaml.Unmarshal(data, vm)
-		if err != nil {
-			return err
-		}
 	}
 	if err != nil {
+		return errors.Wrap(err, "read vm config")
+	}
+	err = yaml.Unmarshal(data, vm)
+	if err != nil {
+		return errors.Wrap(err, "failed to unmarshal vm")
+	}
+	cnctx := &godaemon.Context{
+		PidFileName: vm.PIDFile(),
+		PidFilePerm: 0644,
+		LogFileName: filepath.Join(vm.Dir(), v1.HostAgentStdoutLog),
+		LogFilePerm: 0644,
+		Umask:       027,
+		WorkDir:     vm.Dir(),
+	}
+	d, err := cnctx.Reborn()
+	if err != nil {
+		return errors.Wrapf(err, "reborn daemon")
+	}
+	if d != nil {
+		klog.Infof("daemon is running: %d", d.Pid)
 		return err
 	}
-	klog.Infof("start vm with data: [%s]", string(data))
+
+	defer cnctx.Release()
+
+	klog.Infof("[%s]daemon started: with pid [%d]", vm.Name, os.Getpid())
+
+	klog.Infof("[%s]start vm with data: [%s]", vm.Name, string(data))
 	if vm.Name == "" {
 		return fmt.Errorf("vm name is required")
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	signalFunc := func() {
-		sigchan := make(chan os.Signal, 10)
-		signal.Notify(sigchan, os.Interrupt, os.Kill, syscall.SIGTERM)
-		for {
-			klog.Infof("waiting for signal")
-			select {
-			case sig := <-sigchan:
-				cancel()
-				klog.Infof("received signal: %s", sig.String())
-				return
-			}
-		}
-	}
-	go signalFunc()
-	if vm.Spec.GUI {
-		klog.Infof("run gui with lock thread")
-		// Without this the call to vz.RunGUI fails. Adding it here, as this has to be called before the vz cgo loads.
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-	}
-	host, err := hostagent.New(vm, os.Stdout)
+
+	sigchan := make(chan os.Signal, 10)
+	signal.Notify(sigchan, os.Interrupt, os.Kill, syscall.SIGTERM)
+	host, err := hostagent.New(vm, sigchan)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "new host agent")
 	}
-	return host.Run(ctx)
+	return host.Run(context.TODO())
 }
 
 type Flags struct {

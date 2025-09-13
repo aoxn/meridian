@@ -97,10 +97,6 @@ func (vm *vmWrapper) Loop(ctx context.Context, driver *backend.BaseDriver) {
 			klog.Infof("[VZ] - vm state changed: [%s]", newState)
 			switch newState {
 			case vz.VirtualMachineStateRunning:
-				err := driver.I.SavePID()
-				if err != nil {
-					klog.Errorf("save pidfile %q already exists", driver.I.PIDFile())
-				}
 				filesToRemove[driver.I.PIDFile()] = struct{}{}
 			case vz.VirtualMachineStateStopped:
 				for f := range filesToRemove {
@@ -150,8 +146,12 @@ func createVM(driver *backend.BaseDriver) (*vz.VirtualMachine, error) {
 
 func newVmWithCfg(driver *backend.BaseDriver, vmConfig *vz.VirtualMachineConfiguration) (*vz.VirtualMachine, error) {
 	var err error
-	if err = attachSerialPort(driver, vmConfig); err != nil {
-		return nil, err
+	switch strings.ToLower(string(driver.I.Spec.OS)) {
+	case "darwin":
+	default:
+		if err = attachSerialPort(driver, vmConfig); err != nil {
+			return nil, err
+		}
 	}
 
 	if err = attachNetwork(driver, vmConfig); err != nil {
@@ -238,11 +238,6 @@ func newPlatformConfigLinux(driver *backend.BaseDriver) (vz.PlatformConfiguratio
 	}
 
 	return vz.NewGenericPlatformConfiguration(vz.WithGenericMachineIdentifier(machineIdentifier))
-	//if err != nil {
-	//	return err
-	//}
-	//vmConfig.SetPlatformVirtualMachineConfiguration(platformConfig)
-	//return nil
 }
 
 // https://developer.apple.com/documentation/virtualization/running_linux_in_a_virtual_machine?language=objc#:~:text=Configure%20the%20Serial%20Port%20Device%20for%20Standard%20In%20and%20Out
@@ -398,9 +393,17 @@ func validateDiskFormat(diskPath string) error {
 }
 
 func attachDisks(driver *backend.BaseDriver, vmConfig *vz.VirtualMachineConfiguration) error {
-	baseDiskPath := filepath.Join(driver.I.Dir(), v1.BaseDisk)
-	diffDiskPath := filepath.Join(driver.I.Dir(), v1.DiffDisk)
-	ciDataPath := filepath.Join(driver.I.Dir(), v1.CIDataISO)
+	var (
+		ciDataPath   string
+		diffDiskPath = filepath.Join(driver.I.Dir(), v1.DiffDisk)
+		baseDiskPath = filepath.Join(driver.I.Dir(), baseDiskName(string(driver.I.Spec.OS)))
+	)
+	switch strings.ToLower(string(driver.I.Spec.OS)) {
+	case "darwin":
+		ciDataPath = filepath.Join(driver.I.Dir(), v1.CIDataDMG)
+	default:
+		ciDataPath = filepath.Join(driver.I.Dir(), v1.CIDataISO)
+	}
 	isBaseDiskCDROM, err := iso9660util.IsISO9660(baseDiskPath)
 	if err != nil {
 		return err
@@ -486,25 +489,41 @@ func attachDisks(driver *backend.BaseDriver, vmConfig *vz.VirtualMachineConfigur
 func attachDisplay(driver *backend.BaseDriver, vmConfig *vz.VirtualMachineConfiguration) error {
 	switch driver.I.Spec.Video.Display {
 	case "vz", "default":
-		graphicsDeviceConfiguration, err := vz.NewVirtioGraphicsDeviceConfiguration()
-		if err != nil {
-			return err
+		var err error
+		var gdc vz.GraphicsDeviceConfiguration
+		switch strings.ToLower(string(driver.I.Spec.OS)) {
+		case "darwin":
+			gdc, err = GetMacGDC()
+			if err != nil {
+				return errors.Wrapf(err, "get mac graphic device config")
+			}
+		default:
+			gdc, err = getGenericGDC()
+			if err != nil {
+				return errors.Wrapf(err, "get generic gdc")
+			}
 		}
-		scanoutConfiguration, err := vz.NewVirtioGraphicsScanoutConfiguration(1920, 1200)
-		if err != nil {
-			return err
-		}
-		graphicsDeviceConfiguration.SetScanouts(scanoutConfiguration)
-
-		vmConfig.SetGraphicsDevicesVirtualMachineConfiguration([]vz.GraphicsDeviceConfiguration{
-			graphicsDeviceConfiguration,
-		})
+		vmConfig.SetGraphicsDevicesVirtualMachineConfiguration([]vz.GraphicsDeviceConfiguration{gdc})
 		return nil
 	case "none":
 		return nil
 	default:
-		return fmt.Errorf("unexpected video display %q", driver.I.Spec.Video.Display)
 	}
+	return fmt.Errorf("unexpected video display %q", driver.I.Spec.Video.Display)
+}
+
+func getGenericGDC() (vz.GraphicsDeviceConfiguration, error) {
+	graphicsDeviceConfiguration, err := vz.NewVirtioGraphicsDeviceConfiguration()
+	if err != nil {
+		return nil, err
+	}
+	scanoutConfiguration, err := vz.NewVirtioGraphicsScanoutConfiguration(1920, 1200)
+	if err != nil {
+		return nil, err
+	}
+	graphicsDeviceConfiguration.SetScanouts(scanoutConfiguration)
+
+	return graphicsDeviceConfiguration, nil
 }
 
 func attachFolderMounts(driver *backend.BaseDriver, vmConfig *vz.VirtualMachineConfiguration) error {

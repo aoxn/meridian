@@ -7,7 +7,7 @@ import (
 
 func TestCIDATA(t *testing.T) {
 	ci := NewCloudInit(nil, nil)
-	err := ci.GenCIISO()
+	err := ci.CreateBootDisk()
 	if err != nil {
 		t.Fatal(err)
 		return

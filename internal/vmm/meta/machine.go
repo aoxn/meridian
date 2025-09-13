@@ -15,8 +15,12 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
+
+	proc "github.com/shirou/gopsutil/v4/process"
 )
 
 type PidCondition struct {
@@ -47,7 +51,7 @@ func (m *machine) Get(key string) (*Machine, error) {
 		return mch, err
 	}
 	pid, _ := mch.LoadPID()
-	mch.SandboxPID = pid.PID
+	mch.SandboxPID = pid
 	return mch, nil
 }
 
@@ -149,7 +153,7 @@ type Machine struct {
 	Name       string                 `json:"name"`
 	AbsDir     string                 `json:"absDir"`
 	Created    metav1.Time            `json:"created"`
-	SandboxPID int                    `json:"sandboxPid"`
+	SandboxPID int32                  `json:"sandboxPid"`
 	Login      string                 `json:"lgoin"`
 	Spec       *v1.VirtualMachineSpec `json:"spec"`
 	Protected  bool                   `json:"protected"`
@@ -222,37 +226,28 @@ func (m *Machine) StageUtil() *StageUtil {
 	return &StageUtil{root: m.AbsDir}
 }
 
-func (m *Machine) SavePID() error {
-	pidFile := m.PIDFile()
-	_, err := os.Stat(pidFile)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		klog.Errorf("stat pidfile %q : %v", pidFile, err)
-	}
-	data, _ := json.MarshalIndent(PidCondition{
-		Name:  m.Name,
-		PID:   os.Getpid(),
-		Stamp: time.Now(),
-	}, "", "    ")
-	return os.WriteFile(pidFile, data, 0o644)
-}
-
-func (m *Machine) LoadPID() (PidCondition, error) {
+func (m *Machine) LoadPID() (int32, error) {
 	pidFile := m.PIDFile()
 	data, err := os.ReadFile(pidFile)
 	if err != nil {
-		return PidCondition{}, err
+		if os.IsNotExist(err) {
+			return 0, fmt.Errorf("NotFound")
+		}
+		_ = os.Remove(pidFile)
+		return 0, err
 	}
-	pid := PidCondition{}
-	err = json.Unmarshal(data, &pid)
-	if err != nil {
-		return PidCondition{}, err
-	}
-	_, err = validatePid(pid.PID)
+	pid, err := strconv.Atoi(string(data))
 	if err != nil {
 		_ = os.Remove(pidFile)
-		return PidCondition{}, err
+		return 0, errors.Wrapf(err, "parse pid from [%s]", data)
 	}
-	return pid, nil
+
+	_, err = validatePid(int32(pid))
+	if err != nil {
+		_ = os.Remove(pidFile)
+		return 0, err
+	}
+	return int32(pid), nil
 }
 
 func (m *Machine) WaitStop(ctx context.Context, timeout time.Duration) error {
@@ -274,18 +269,25 @@ func (m *Machine) WaitStop(ctx context.Context, timeout time.Duration) error {
 	}
 }
 
-func validatePid(pid int) (int, error) {
-	proc, err := os.FindProcess(pid)
+func validatePid(pid int32) (int32, error) {
+	p, err := proc.NewProcess(pid)
 	if err != nil {
 		return 0, err
+	}
+	n, err := p.Name()
+	if err != nil {
+		return 0, errors.Wrapf(err, "get process name by pid %d", pid)
+	}
+	if !strings.Contains(n, "meridian") {
+		return 0, fmt.Errorf("NotFound: %d", pid)
 	}
 	if runtime.GOOS == "windows" {
 		return pid, nil
 	}
-	err = proc.Signal(syscall.Signal(0))
+	err = p.SendSignal(syscall.Signal(0))
 	if err != nil {
 		if errors.Is(err, os.ErrProcessDone) {
-			return 0, fmt.Errorf("pid %d is already done", pid)
+			return 0, fmt.Errorf("NotFound")
 		}
 		// We may not have permission to send the signal (e.g. to network daemon running as root).
 		// But if we get a permissions error, it means the process is still running.
@@ -330,21 +332,24 @@ func (m *Machine) Unprotect() error {
 	return nil
 }
 
-func (m *Machine) Stop() error {
+func (m *Machine) Stop(ctx context.Context) error {
 	klog.Infof("stop instance: [%s]", m.Name)
 	pid, err := m.LoadPID()
 	if err != nil {
+		if strings.Contains(err.Error(), "NotFound") {
+			return nil
+		}
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		return err
 	}
-	if pid.PID == 0 {
+	if pid == 0 {
 		return os.Remove(m.PIDFile())
 	}
-	proc, err := os.FindProcess(pid.PID)
+	proc, err := os.FindProcess(int(pid))
 	if err != nil {
-		return errors.Wrapf(err, "find pid %d", pid.PID)
+		return errors.Wrapf(err, "find pid %d", pid)
 	}
 	err = proc.Signal(os.Interrupt)
 	if err != nil {
@@ -359,11 +364,12 @@ func (m *Machine) Stop() error {
 		}
 	}
 	// todo: wait process exit;
-	return nil
+	klog.V(5).Infof("signal pid %d with [os.Interupt] signal", pid)
+	return m.WaitStop(ctx, 3*time.Minute)
 }
 
-func (m *Machine) Destroy() error {
-	err := m.Stop()
+func (m *Machine) Destroy(ctx context.Context) error {
+	err := m.Stop(ctx)
 	if err != nil {
 		return err
 	}

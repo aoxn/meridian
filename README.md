@@ -1,8 +1,8 @@
-# Welcome to Meridian
+# Welcome to Meridian Desktop
 
-Merdian is a sandbox management tool suitable for AI Agent and  Containers Develop include OutOfTheBox Kubernetes environment.
+Merdian is a sandbox management tool suitable for AI Agent && Compute Use && Containers include OutOfTheBox Kubernetes environment.
 
-It runs on intel & Apple silicon Mac and provided user with Linux &MacOS VM capabilitys by Apple's  virtualization.framework in near-native performance.
+It runs on intel & Apple silicon Mac and provided user with Linux &MacOS VM capability by Apple's  virtualization.framework in near-native performance.
 
 Meridian also create and manage Docker & Kubernetes environment in minutes, and with gVisor support specially.
 
@@ -30,7 +30,7 @@ You can add cloud workers into the kubernetes cluster, alibaba cloud is supporte
 
 ## Quick Guide
 
-### Install
+### Install meridian as a user daemon process
 
 ```shell
 
@@ -40,6 +40,8 @@ root# curl get.xdpin.cn/meridian/iou.sh|bash -x
 set meridian alia command `alias m=meridian`
 
 ### VM manage
+
+![MacOS](./docs/images/d001.jpeg)
 
 Find available vm images
 
