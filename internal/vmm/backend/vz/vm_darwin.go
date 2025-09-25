@@ -528,6 +528,13 @@ func getGenericGDC() (vz.GraphicsDeviceConfiguration, error) {
 
 func attachFolderMounts(driver *backend.BaseDriver, vmConfig *vz.VirtualMachineConfiguration) error {
 	var mounts []vz.DirectorySharingDeviceConfiguration
+	rosetta, err := createRosettaDirectoryShareConfiguration()
+	if err == nil {
+		mounts = append(mounts, rosetta)
+		klog.Infof("[%s]add rosetta directory sharing configuration", driver.I.Name)
+	} else {
+		klog.Errorf("failed to create rosetta directory share: %s", err.Error())
+	}
 
 	for i, mount := range driver.I.Spec.Mounts {
 		klog.Infof("process vz mount      : %s, %s, %t, %s", mount.Location, mount.MountPoint, mount.Writable, mount.MountType)
@@ -561,7 +568,6 @@ func attachFolderMounts(driver *backend.BaseDriver, vmConfig *vz.VirtualMachineC
 
 		klog.Infof("process vz mount added: %s, %s, %t, %s", mount.Location, mount.MountPoint, mount.Writable, mount.MountType)
 	}
-
 	if len(mounts) > 0 {
 		vmConfig.SetDirectorySharingDevicesVirtualMachineConfiguration(mounts)
 	}

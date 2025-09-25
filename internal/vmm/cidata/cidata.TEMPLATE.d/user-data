@@ -4,6 +4,8 @@
 growpart:
   mode: auto
   devices: ['/']
+mounts:
+- [vz-rosetta, /mnt/md-rosetta, virtiofs, defaults, "0", "0"]
 
 {{- if .TimeZone }}
 timezone: {{.TimeZone}}

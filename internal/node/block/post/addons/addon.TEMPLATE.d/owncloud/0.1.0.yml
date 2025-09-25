@@ -25,7 +25,7 @@ spec:
         node-role.kubernetes.io/control-plane: ""
       containers:
         - name: owncloud
-          image: registry.{{.Region}}.aliyuncs.com/aoxn/owncloud:{{.ImageVersion}}
+          image: "registry.{{.Region}}.aliyuncs.com/aoxn/owncloud:{{.ImageVersion}}"
           imagePullPolicy: IfNotPresent
           env:
             - name: DEBUG
@@ -37,7 +37,7 @@ spec:
             - name: OWNCLOUD_DOMAIN
               value: "{{ .APIDomain }}:9000"
             - name: OWNCLOUD_TRUSTED_DOMAINS
-              value: "{{ .APIDomain }}:9000,localhost:9000"
+              value: "{{ .APIDomain }}:9000,xdpin.cn:9000,localhost:9000"
             - name: OWNCLOUD_DB_TYPE
               value: "mysql"
             - name: OWNCLOUD_DB_NAME
