@@ -72,7 +72,7 @@ func (img *LocalImageMgr) Pull(name string) (*Pulling, error) {
 			defer img.remove(name)
 			pull.err = img.backend.Image().Pull(context.TODO(), name, pull.PullOption)
 			pull.complete = true
-			klog.Errorf("pull image [%s] complete: %v", name, err)
+			klog.Errorf("pull image [%s] complete: %v", name, pull.err)
 		}(pull)
 		return pull, nil
 	}

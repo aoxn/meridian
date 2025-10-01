@@ -157,7 +157,7 @@ func (m *image) Pull(ctx context.Context, name string, opt *PullOpt) error {
 		downloadOpts = append(downloadOpts, downloader.WithDecompressBar(opt.DecompressBar))
 	}
 	res, err := downloader.Download(ctx, "", opt.Location, downloadOpts...)
-	klog.Infof("pull image %s from %s with status: [%v]", name, opt.Location, res)
+	klog.V(7).Infof("pull image %s from %s with r=[%v]", name, opt.Location, res)
 	if err != nil {
 		return errors.Wrapf(err, "failed to pull image %s", name)
 	}
