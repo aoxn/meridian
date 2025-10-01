@@ -616,6 +616,7 @@ func validateLocalFileDigest(localPath string, expectedDigest digest.Digest) err
 }
 
 func openAt(tmpFile string, resume bool) (*os.File, int64, error) {
+	klog.V(5).Infof("open at : %s", tmpFile)
 	var f *os.File
 	if resume {
 		// 支持断点续传
@@ -629,7 +630,7 @@ func openAt(tmpFile string, resume bool) (*os.File, int64, error) {
 		if err != nil {
 			return f, 0, err
 		}
-		klog.V(5).Infof("download start from breaking point: %d/%s", fileInfo.Size(), units.HumanSize(float64(fileInfo.Size())))
+		klog.V(5).Infof("download start from breaking point: %s", units.HumanSize(float64(fileInfo.Size())))
 		return f, fileInfo.Size(), nil
 	}
 	// 不支持断点续传
@@ -674,7 +675,7 @@ func setLastInfo(at, content string) {
 
 func downloadFrom(ctx context.Context, url string, o options) error {
 
-	shad := o.canonical
+	shad := cacheDirectoryPath(o.cacheDir, url)
 	shadData := filepath.Join(shad, "data")
 	shadTime := filepath.Join(shad, "time")
 	shadType := filepath.Join(shad, "type")
